@@ -27,6 +27,7 @@ engine = create_engine(
 
 def create_db_and_tables():
     """Create all tables defined by SQLModel classes. Safe to call multiple times."""
+    import src.models  # Ensure models are registered in SQLModel metadata
     SQLModel.metadata.create_all(engine)
 
 

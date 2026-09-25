@@ -1,17 +1,11 @@
 /**
  * Navigation Bar — AssureX Claim Engine
- *
- * This component:
- * 1. Shows the brand name and navigation links based on authentication state
- * 2. Displays role-specific nav items (admin gets Admin Dashboard, reviewer gets Review Queue)
- * 3. Shows user name + role badge when logged in, with a logout button
- * 4. Collapses into a hamburger menu on mobile (Bootstrap responsive navbar)
- * 5. Highlights the currently active route
  */
 
 import { Navbar, Nav, Container, Button, Badge } from 'react-bootstrap';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { FaShieldAlt, FaPlusCircle, FaListAlt, FaTasks, FaCogs, FaSignOutAlt, FaBox } from 'react-icons/fa';
 
 export default function AppNavbar() {
   const { isAuthenticated, user, role, logout } = useAuth();
@@ -23,48 +17,88 @@ export default function AppNavbar() {
   };
 
   return (
-    <Navbar bg="dark" variant="dark" expand="lg" sticky="top">
-      <Container>
-        <Navbar.Brand as={NavLink} to="/" className="fw-bold">
-          🛡️ AssureX
+    <Navbar expand="lg" sticky="top" className="navbar-custom py-2">
+      <Container fluid className="px-4">
+        <Navbar.Brand as={NavLink} to="/" className="text-white">
+          <span className="p-1 px-2 rounded bg-primary text-white me-2" style={{ fontSize: '1rem' }}>
+            <FaShieldAlt className="mb-1" />
+          </span>
+          <span>Assure<span className="text-primary">X</span></span>
+          <span className="badge bg-secondary ms-2 text-uppercase" style={{ fontSize: '0.65rem', letterSpacing: '0.05em' }}>
+            Dual-Brain AI
+          </span>
         </Navbar.Brand>
-        <Navbar.Toggle aria-controls="main-nav" />
+
+        <Navbar.Toggle aria-controls="main-nav" className="border-0 text-white" />
+
         <Navbar.Collapse id="main-nav">
           {isAuthenticated ? (
             <>
-              <Nav className="me-auto">
-                <Nav.Link as={NavLink} to="/dashboard">Dashboard</Nav.Link>
-                <Nav.Link as={NavLink} to="/products">Products</Nav.Link>
-                <Nav.Link as={NavLink} to="/warranties">Warranties</Nav.Link>
-                <Nav.Link as={NavLink} to="/claims">Claims</Nav.Link>
+              <Nav className="me-auto ms-lg-3 gap-1">
+                <Nav.Link as={NavLink} to="/dashboard">
+                  Dashboard
+                </Nav.Link>
+                <Nav.Link as={NavLink} to="/claims">
+                  <FaListAlt className="me-1 mb-1" /> Claims
+                </Nav.Link>
+                <Nav.Link as={NavLink} to="/claims/submit" className="text-primary fw-bold">
+                  <FaPlusCircle className="me-1 mb-1" /> Submit Claim
+                </Nav.Link>
+                <Nav.Link as={NavLink} to="/products">
+                  <FaBox className="me-1 mb-1" /> Products
+                </Nav.Link>
 
-                {/* Reviewer-specific */}
+                {/* Reviewer / Admin Queue */}
                 {(role === 'reviewer' || role === 'admin') && (
-                  <Nav.Link as={NavLink} to="/review-queue">Review Queue</Nav.Link>
+                  <Nav.Link as={NavLink} to="/review-queue">
+                    <FaTasks className="me-1 mb-1 text-warning" /> Review Queue
+                  </Nav.Link>
                 )}
 
-                {/* Admin-specific */}
+                {/* Admin Management */}
                 {role === 'admin' && (
-                  <Nav.Link as={NavLink} to="/admin/dashboard">Admin</Nav.Link>
+                  <Nav.Link as={NavLink} to="/admin">
+                    <FaCogs className="me-1 mb-1 text-info" /> Admin
+                  </Nav.Link>
                 )}
               </Nav>
 
-              <Nav className="align-items-center">
-                <Nav.Item className="me-3">
-                  <span className="text-light">
-                    {user?.full_name}{' '}
-                    <Badge bg="info" className="text-capitalize">{role}</Badge>
-                  </span>
-                </Nav.Item>
-                <Button variant="outline-light" size="sm" onClick={handleLogout}>
-                  Logout
+              <Nav className="align-items-center gap-3 mt-3 mt-lg-0">
+                <div className="d-flex align-items-center gap-2">
+                  <div className="text-end">
+                    <div className="fw-semibold text-white" style={{ fontSize: '0.875rem' }}>
+                      {user?.full_name || user?.username}
+                    </div>
+                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                      {user?.email}
+                    </div>
+                  </div>
+                  <Badge 
+                    bg={role === 'admin' ? 'danger' : role === 'reviewer' ? 'warning' : 'primary'}
+                    className="text-capitalize text-dark fw-bold px-2 py-1"
+                  >
+                    {role}
+                  </Badge>
+                </div>
+
+                <Button 
+                  variant="outline-secondary" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  className="d-flex align-items-center gap-1"
+                >
+                  <FaSignOutAlt /> Logout
                 </Button>
               </Nav>
             </>
           ) : (
-            <Nav className="ms-auto">
-              <Nav.Link as={NavLink} to="/login">Login</Nav.Link>
-              <Nav.Link as={NavLink} to="/register">Register</Nav.Link>
+            <Nav className="ms-auto gap-2">
+              <Nav.Link as={NavLink} to="/login">
+                Login
+              </Nav.Link>
+              <Button as={NavLink} to="/register" variant="primary" size="sm" className="px-3">
+                Register
+              </Button>
             </Nav>
           )}
         </Navbar.Collapse>

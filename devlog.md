@@ -75,6 +75,36 @@
 - **Changes made:** TM training script, TM predictor, batch predictor in tabular ML, compare_models benchmark, saved TM model artifacts, and comparison reports.
 - **Tests run:** Tested live inference on demo cards (`sample_likely_valid.png`, `sample_likely_invalid.png`, `sample_manual_review.png`), verified all predictions, executed complete 35-claim benchmark suite.
 
+### Session 5: Full Application Development & End-to-End Integration (Phase 4)
+- **What was built:**
+  - **Backend REST API Architecture & Services**:
+    - `backend/src/models/entities.py`: Complete SQLModel ORM models (`User`, `Product`, `Warranty`, `Claim`, `ClaimAuditLog`) with JSON serialization fields for dual-model probability distributions, rule checklists, and audit events.
+    - `backend/src/auth/service.py`: Bcrypt password hashing, PyJWT bearer token creation/validation, and RBAC security dependency factories (`get_current_user`, `require_role`).
+    - `backend/src/services/rule_engine.py`: Deterministic business rule engine verifying purchase date chronologies, 7-day warranty grace windows, hardware serial reconciliation, covered/excluded damage categories, unauthorized repair voids, and duplicate submission checks.
+    - `backend/src/services/ocr_service.py`: Receipt and invoice scanning engine detecting merchant headers, invoice dates, purchase totals, and hardware serial numbers.
+    - `backend/src/services/card_service.py`: Dynamic 1200x1680 High-DPI Claim Summary Card generator rendering cards in real-time with zero model predictions/scores (strictly compliant with competition regulations).
+    - `backend/src/services/adjudication_engine.py`: Multi-model arbitrator uniting Rule Engine + Tabular XGBoost + MobileNetV2 Vision AI to produce final adjudication status (`Auto-Approved`, `Auto-Rejected`, `Manual Review Required`), agreement flags, and confidence metrics.
+    - Routers: `/api/auth` (register, login, profile), `/api/claims` (submit, list, search, stats, dossier detail, adjuster manual adjudication), `/api/products` (catalog), `/api/warranties` (coverage status), `/api/policies` (thresholds), `/api/admin` (telemetry, re-seed).
+    - Vectorized Seeder (`backend/src/routers/admin.py`): Populated SQLite database (`backend/database/assurex.db`) with default demo roles (`admin`, `adjuster_sarah`, `customer_mike`), catalog products, and 35 benchmark claims evaluated through both AI models.
+  - **Frontend Application (React + Vite + Recharts + Custom CSS)**:
+    - High-contrast, enterprise-grade dark insurtech design system (`frontend/src/index.css`) with glassmorphism, responsive cards, glow accents, and Google Fonts (`Plus Jakarta Sans` & `JetBrains Mono`).
+    - `Dashboard.jsx`: Executive KPI widgets (auto-approval %, auto-rejection %, dual-brain AI agreement rate), interactive Recharts distribution donut and bar charts, and live claim stream.
+    - `SubmitClaim.jsx`: Multi-step claim intake wizard with catalog pre-fill, receipt file upload, OCR pre-scan preview, and instant AI adjudication results modal.
+    - `ClaimsList.jsx`: Searchable and filterable claims table with multi-attribute filtering (category, status, keyword).
+    - `ClaimDetail.jsx`: Adjudication dossier with 1200x1680 Claim Summary Card viewer + full-screen zoom modal, dual-model probability comparison bars, 8-point rule verification checklist, audit log timeline, and adjuster decision action panel.
+    - `ReviewQueue.jsx`: Adjuster review docket focused on disputed, low-confidence, or manual-review claims.
+    - `Admin.jsx`: System diagnostics, neural model readiness check, and interactive confidence threshold sliders.
+    - `Products.jsx`: Hardware asset registry with direct "File Claim" actions.
+    - `Navbar.jsx` & `Login.jsx`: One-click demo profile selectors for Chief Admin, Lead Adjuster, and Customer.
+  - **Automated Integration Test Suite (`backend/tests/test_e2e.py`)**:
+    - Validates health check, authentication, KPI calculations, end-to-end claim submission with dynamic card generation, dual-model inference, and manual reviewer override. All tests passing with 100% success.
+- **Problems hit & resolved:**
+  - FastAPI Pydantic v2 validation required `product_id` to be optional for spontaneous claims — implemented dynamic ID fallback `PRD-{UUID}`.
+  - Pydantic v2 `EmailStr` requirement bypassed by using standard `str` fields, preventing external dependency breakage.
+  - Resolved pathing in `card_service.py` to prevent nested `backend/backend/uploads` directory creation.
+- **Changes made:** Backend models, schemas, auth, routers, services, frontend pages, design system, test suite, and build bundle.
+- **Tests run:** Executed `python -m tests.test_e2e` (ALL PASSED), verified frontend production build with `npm run build` (0 errors), and verified dual-model adjudication on live submissions.
+
 ---
 
 *Entries will be added after every development session.*

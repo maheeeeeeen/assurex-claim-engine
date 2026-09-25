@@ -8,8 +8,8 @@
 import api from './client';
 
 export const authAPI = {
-  login: (email, password) =>
-    api.post('/api/auth/login', { email, password }),
+  login: (identifier, password) =>
+    api.post('/api/auth/login', { username: identifier, email: identifier, password }),
 
   register: (userData) =>
     api.post('/api/auth/register', userData),
