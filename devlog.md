@@ -49,6 +49,32 @@
 - **Changes made:** Card generator, ML preprocessing, training pipeline, predictor, reports, and charts.
 - **Tests run:** Verified live predictions for Valid, Invalid, and Manual Review claims via `TabularPredictor`.
 
+### Session 4: Teachable Machine Model & Dual Model Comparison Benchmark (Phase 3)
+- **What was built:**
+  - **Teachable Machine Architecture & Training (`backend/src/ml/train_teachable_machine.py`)**:
+    - MobileNetV2 feature extractor backbone with GlobalAveragePooling2D, Dropout(0.2), Dense(128, ReLU), and Dense(3, Softmax) output head matching Google Teachable Machine specification.
+    - Standard 224x224 RGB input with `[-1.0, 1.0]` pixel normalization.
+    - Fast in-memory transfer learning workflow eliminating CPU starvation.
+    - Exported `backend/model/teachable_machine/keras_model.h5` (10 MB), `labels.txt`, and `model_metadata.json`.
+    - Achieved **95.47% Validation Accuracy** and **95.27% Weighted F1-score** across all 375 validation cards.
+  - **Computer Vision Inference Service (`backend/src/ml/teachable_machine.py`)**:
+    - Production `TeachableMachinePredictor` class supporting single image and vectorized batch predictions for file paths, PIL Images, byte streams, and base64 strings.
+    - Optimized callable tensor execution in inference mode (`self.model(batch_tensor, training=False)`).
+  - **Tabular Batch Inference Upgrade (`backend/src/ml/predictor.py`)**:
+    - Added `predict_batch` for high-throughput vectorized tabular predictions.
+  - **Dual Model Comparison Benchmark (`backend/src/ml/compare_models.py` - Deliverable 6)**:
+    - Evaluated 35 unseen test claims across all categories and ground truths.
+    - Dual-model agreement rate: **94.29%** (33/35 identical decisions).
+    - Python Tabular Model Accuracy: **100.0%** (35/35).
+    - Teachable Machine Image Model Accuracy: **94.29%** (33/35).
+    - Mean Absolute Confidence Difference: **12.61%** (`|Tabular Conf - TM Conf|`).
+    - Match breakdown: 15 Strong Matches (42.9%), 4 Acceptable Matches (11.4%), 11 Weak Matches (31.4%), 3 Weak Matches >25% (8.6%), 2 Disagreements (5.7%), 0 Uncertainties.
+    - Exported `reports/model_comparison_30_claims.md` and `reports/model_comparison_30_claims.json`.
+- **Problems hit:** Initial disk-bound `ImageDataGenerator` reading 3,500 uncompressed 1200x1680 PNGs on-the-fly bottlenecked single-threaded CPU I/O; resolved by caching balanced resized 224x224 arrays in memory, extracting bottleneck features once, and assembling the end-to-end Keras pipeline.
+- **Model failures:** Minor divergence on 2 complex boundary claims (`CLM-00775` and `CLM-02103`) where tabular rule context required manual review while card visual appearance leaned valid — confirming the SRS architectural principle that dual-model disagreements should escalate to human review.
+- **Changes made:** TM training script, TM predictor, batch predictor in tabular ML, compare_models benchmark, saved TM model artifacts, and comparison reports.
+- **Tests run:** Tested live inference on demo cards (`sample_likely_valid.png`, `sample_likely_invalid.png`, `sample_manual_review.png`), verified all predictions, executed complete 35-claim benchmark suite.
+
 ---
 
 *Entries will be added after every development session.*

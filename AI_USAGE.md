@@ -46,6 +46,23 @@
 - **Testing performed:** Verified 4,250 high-res card renders (zero overlaps verified via image inspection). Executed 5-fold CV across 8 models, verified test F1 = 1.0000 on unseen split, verified `TabularPredictor` live inference on Valid, Invalid, and Manual Review test cases.
 - **Verified by:** Team Lead
 
+## 2026-09-26 — Google Antigravity (Gemini)
+- **Purpose:** Teachable Machine Image Classifier Training & Dual-Model Comparison Benchmark (Phase 3)
+- **Prompt/assistance type:** "Train MobileNetV2 image model matching Google Teachable Machine specification, export keras_model.h5 + labels.txt, build inference engine, and run 35-claim benchmark for Deliverable 6"
+- **Files/modules affected:**
+  - `backend/src/ml/train_teachable_machine.py`
+  - `backend/src/ml/teachable_machine.py`
+  - `backend/src/ml/predictor.py`
+  - `backend/src/ml/compare_models.py`
+  - `backend/model/teachable_machine/keras_model.h5`
+  - `backend/model/teachable_machine/labels.txt`
+  - `backend/model/teachable_machine/model_metadata.json`
+  - `reports/model_comparison_30_claims.md`
+  - `reports/model_comparison_30_claims.json`
+- **Modifications made by team:** Optimized pipeline for CPU execution using memory-cached transfer learning; built vectorized batch prediction interfaces for both tabular and vision inference engines; implemented 5-category match taxonomy for Deliverable 6.
+- **Testing performed:** Validated exported Keras model against Teachable Machine format (224x224 RGB, [-1, 1] normalization); verified 95.47% validation accuracy on 375 validation cards; executed live inference across demo cards and 35 unseen test claims; verified JSON and Markdown benchmark reports.
+- **Verified by:** Team Lead
+
 ---
 
 *Entries will be added for every AI-assisted development session.*

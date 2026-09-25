@@ -1,0 +1,3 @@
+0 Likely Valid
+1 Likely Invalid
+2 Manual Review Required

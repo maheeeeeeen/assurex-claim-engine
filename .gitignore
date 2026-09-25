@@ -50,6 +50,8 @@ frontend/dist/
 *.joblib
 !backend/model/.gitkeep
 !backend/model/teachable_machine/.gitkeep
+!backend/model/best_model.joblib
+!backend/model/teachable_machine/keras_model.h5
 
 # Uploaded files
 backend/uploads/
