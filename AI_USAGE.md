@@ -27,6 +27,25 @@
 - **Testing performed:** Validated column consistency across train/val/test splits, checked Pillow rendering output, confirmed 4,250 PNG card files generated successfully with zero errors.
 - **Verified by:** Team Lead
 
+## 2026-09-26 — Google Antigravity (Gemini)
+- **Purpose:** High-Resolution Card Engine Overhaul & Tabular ML 8-Model Benchmark (Phase 2)
+- **Prompt/assistance type:** "Overhaul card generator to 1200x1680 high-DPI with zero overlap; train and compare 8 ML classifiers with 5-fold CV, confusion matrices, and feature importance"
+- **Files/modules affected:**
+  - `backend/dataset_generator/generate_cards.py`
+  - `sample_claims/demo_cards/*`
+  - `backend/src/ml/preprocessing.py`
+  - `backend/src/ml/train_models.py`
+  - `backend/src/ml/predictor.py`
+  - `backend/model/best_model.joblib`
+  - `reports/confusion_matrices/*`
+  - `reports/feature_importance.png`
+  - `reports/model_comparison.json`
+  - `reports/model_comparison.md`
+  - `reports/model_comparison_chart.png`
+- **Modifications made by team:** Redesigned card layout grid with full-width product row, dynamic badge widths, and high-DPI TrueType fonts. Tuned 8 classifier hyper-parameters, audited 5-fold cross-validation results, inspected confusion matrix heatmaps, verified live inference on edge-case claims.
+- **Testing performed:** Verified 4,250 high-res card renders (zero overlaps verified via image inspection). Executed 5-fold CV across 8 models, verified test F1 = 1.0000 on unseen split, verified `TabularPredictor` live inference on Valid, Invalid, and Manual Review test cases.
+- **Verified by:** Team Lead
+
 ---
 
 *Entries will be added for every AI-assisted development session.*

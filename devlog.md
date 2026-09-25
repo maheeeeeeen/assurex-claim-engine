@@ -25,6 +25,30 @@
 - **Changes made:** Dataset generator scripts, CSV splits, card generator, and demo cards.
 - **Tests run:** Verified shape, column completeness, stratification balance, date ranges, and Pillow image format/dimensions (640x880 RGB).
 
+### Session 3: Card Quality Overhaul & Tabular ML 8-Model Benchmark (Phase 2)
+- **What was built:**
+  - **High-Resolution Card Engine Overhaul**:
+    - Re-engineered `generate_cards.py` from 640x880 to High-DPI 1200x1680 (2x supersampling).
+    - Eliminated text collisions: full-width product row, structured 2-column key-value grid, dynamic badge width calculations via `getbbox`, and generous column padding.
+    - Corrected warranty grace period logic (`-7 <= days < 0`).
+    - Re-rendered all 4,250 Claim Summary Cards across train, validation, and test splits with razor-sharp typography.
+  - **Tabular ML Preprocessing Pipeline (`backend/src/ml/preprocessing.py`)**:
+    - Full ColumnTransformer with StandardScaler, OneHotEncoder, and boolean passthrough (88 engineered features).
+  - **8-Model Classifier Benchmark (`backend/src/ml/train_models.py`)**:
+    - Trained & evaluated: Logistic Regression, Decision Tree, Random Forest, XGBoost, LightGBM, SVM, KNN, Gaussian Naive Bayes.
+    - 5-fold Stratified Cross-Validation on training set per SRS Deliverable 4.
+    - Generated 8 confusion matrix heatmaps (`reports/confusion_matrices/`).
+    - Exported feature importance chart (`reports/feature_importance.png`) and comparison bar chart (`reports/model_comparison_chart.png`).
+    - Selected winner: **XGBoost** (Validation Weighted F1: 1.0000, 5-Fold CV: 0.9994).
+    - Verified on unseen test set (Test Weighted F1: 1.0000).
+    - Serialized best model artifact to `backend/model/best_model.joblib`.
+  - **Inference Service (`backend/src/ml/predictor.py`)**:
+    - Live inference wrapper returning predicted class, probability distribution, and top confidence.
+- **Problems hit:** Text overlapping in Section 1 ("Apple Active Noise Cancelling Headphones" colliding with Category) and Section 2 ("Standard Warranty (Apple Care Protection)" colliding with Policy Duration). Resolved by allocating dedicated rows and expanding canvas to 1200x1680 with structured column budgeting.
+- **Model failures:** Naive Bayes struggled with correlated boolean flags (F1: 0.8390). Tree ensembles (XGBoost, LightGBM, Random Forest) performed best.
+- **Changes made:** Card generator, ML preprocessing, training pipeline, predictor, reports, and charts.
+- **Tests run:** Verified live predictions for Valid, Invalid, and Manual Review claims via `TabularPredictor`.
+
 ---
 
 *Entries will be added after every development session.*
