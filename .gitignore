@@ -1,0 +1,69 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# SQLite
+*.db
+*.sqlite3
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Model files (large)
+*.h5
+*.pkl
+*.joblib
+!backend/model/.gitkeep
+!backend/model/teachable_machine/.gitkeep
+
+# Uploaded files
+backend/uploads/
+
+# Generated card images (too large for git)
+backend/data/cards/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+
+# pytest
+.pytest_cache/
+
+# Logs
+*.log
