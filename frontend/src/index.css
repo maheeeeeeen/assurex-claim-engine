@@ -1,24 +1,33 @@
-/* AssureX Claim Engine — Ultra-Modern Enterprise Design System */
+/* AssureX Claim Engine — Ultra-Modern Enterprise High-Contrast Design System */
 
 :root {
+  /* Bootstrap Overrides for Dark Insurtech Theme */
+  --bs-body-color: #f8fafc;
+  --bs-body-bg: #0b1120;
+  --bs-secondary-color: #cbd5e1;
+  --bs-tertiary-color: #94a3b8;
+  --bs-heading-color: #ffffff;
+  --bs-border-color: rgba(255, 255, 255, 0.15);
+
   --primary-color: #3b82f6;
   --primary-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  --accent-cyan: #06b6d4;
-  --accent-emerald: #10b981;
-  --accent-amber: #f59e0b;
-  --accent-rose: #f43f5e;
-  --accent-purple: #8b5cf6;
+  --accent-cyan: #38bdf8;
+  --accent-emerald: #34d399;
+  --accent-amber: #fbbf24;
+  --accent-rose: #fb7185;
+  --accent-purple: #a78bfa;
 
   --bg-dark: #0f172a;
   --bg-card: #1e293b;
   --bg-card-hover: #24344d;
   --bg-surface: #0b1120;
-  --border-subtle: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(59, 130, 246, 0.3);
+  --border-subtle: rgba(255, 255, 255, 0.12);
+  --border-glow: rgba(59, 130, 246, 0.4);
 
+  /* High-Contrast Crisp Typography */
   --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --text-dim: #64748b;
+  --text-muted: #cbd5e1; /* Upgraded from dim gray to high-contrast slate-300 */
+  --text-dim: #94a3b8;
   
   --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
@@ -34,12 +43,89 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Monospace text */
+/* Monospace font */
 .font-mono {
   font-family: var(--font-mono) !important;
 }
 
-/* Glassmorphism & Cards */
+/* ========================================================
+   HIGH CONTRAST TEXT OVERRIDES (Fix for dark bg visibility)
+   ======================================================== */
+.text-muted, 
+[class*="text-muted"], 
+p.text-muted, 
+small.text-muted, 
+div.text-muted, 
+span.text-muted, 
+.form-text {
+  color: #cbd5e1 !important; /* Bright slate-300 — 9.8:1 WCAG AAA contrast */
+}
+
+.text-secondary {
+  color: #cbd5e1 !important;
+}
+
+/* Headings and primary labels */
+h1, h2, h3, h4, h5, h6, 
+.h1, .h2, .h3, .h4, .h5, .h6,
+.card-title,
+.modal-title {
+  color: #ffffff !important;
+  font-weight: 700;
+}
+
+/* Form labels and checkboxes */
+.form-label, 
+.form-check-label {
+  color: #f1f5f9 !important;
+  font-weight: 600;
+  font-size: 0.885rem;
+  margin-bottom: 0.35rem;
+}
+
+.form-check-input {
+  background-color: #151f30;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.form-check-input:checked {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+}
+
+/* Form Controls Dark & Inputs */
+.form-control, .form-select {
+  background-color: #151f30 !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #ffffff !important;
+  border-radius: 8px;
+  font-size: 0.925rem;
+  font-weight: 500;
+  padding: 0.65rem 0.95rem;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3) !important;
+  background-color: #172338 !important;
+  color: #ffffff !important;
+}
+
+.form-control::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1;
+}
+
+/* Dropdown Option Elements (Windows Browser Fix) */
+.form-select option {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+  padding: 8px 12px;
+}
+
+/* ========================================================
+   CARDS & CONTAINERS
+   ======================================================== */
 .card {
   background-color: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -50,7 +136,7 @@ body {
 }
 
 .card:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 .card-hoverable:hover {
@@ -60,9 +146,10 @@ body {
 }
 
 .card-header {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid var(--border-subtle);
   font-weight: 600;
+  color: #ffffff !important;
   padding: 1rem 1.25rem;
 }
 
@@ -77,7 +164,7 @@ body {
   overflow: hidden;
   border-radius: 14px;
   background: linear-gradient(145deg, #1e293b 0%, #151f30 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .kpi-card::before {
@@ -97,10 +184,10 @@ body {
 
 /* Navigation */
 .navbar-custom {
-  background: rgba(15, 23, 42, 0.85) !important;
+  background: rgba(15, 23, 42, 0.95) !important;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .navbar-brand {
@@ -112,8 +199,8 @@ body {
 }
 
 .nav-link {
-  color: var(--text-muted) !important;
-  font-weight: 500;
+  color: #e2e8f0 !important;
+  font-weight: 600;
   font-size: 0.925rem;
   transition: all 0.15s ease-in-out;
   border-radius: 8px;
@@ -121,16 +208,18 @@ body {
 }
 
 .nav-link:hover, .nav-link.active {
-  color: #fff !important;
-  background-color: rgba(255, 255, 255, 0.06);
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.1) !important;
 }
 
-/* Status Badges */
+/* ========================================================
+   STATUS BADGES & PILLS
+   ======================================================== */
 .badge-status {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.775rem;
   padding: 0.35rem 0.75rem;
   border-radius: 9999px;
@@ -139,133 +228,134 @@ body {
 }
 
 .badge-approved {
-  background-color: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.45);
 }
 
 .badge-rejected {
-  background-color: rgba(244, 63, 94, 0.15);
-  color: #fb7185;
-  border: 1px solid rgba(244, 63, 94, 0.35);
+  background-color: rgba(244, 63, 94, 0.2);
+  color: #fb7185 !important;
+  border: 1px solid rgba(244, 63, 94, 0.45);
 }
 
 .badge-review {
-  background-color: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #fbbf24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.45);
 }
 
 .badge-info {
-  background-color: rgba(6, 182, 212, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(6, 182, 212, 0.35);
+  background-color: rgba(6, 182, 212, 0.2);
+  color: #38bdf8 !important;
+  border: 1px solid rgba(6, 182, 212, 0.45);
 }
 
 /* Agreement Pills */
 .pill-agreed {
-  background-color: rgba(16, 185, 129, 0.12);
-  color: #6ee7b7;
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  background-color: rgba(16, 185, 129, 0.18);
+  color: #6ee7b7 !important;
+  border: 1px solid rgba(16, 185, 129, 0.4);
   border-radius: 6px;
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.55rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .pill-disagreed {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #fca5a5 !important;
+  border: 1px solid rgba(239, 68, 68, 0.4);
   border-radius: 6px;
-  padding: 0.2rem 0.5rem;
+  padding: 0.25rem 0.55rem;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
-/* Dark Table Styles */
+/* ========================================================
+   TABLES
+   ======================================================== */
 .table-dark-custom {
   --bs-table-bg: transparent;
   --bs-table-striped-bg: rgba(255, 255, 255, 0.02);
-  --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.05);
   color: var(--text-main);
   border-collapse: separate;
   border-spacing: 0;
 }
 
 .table-dark-custom th {
-  background-color: rgba(255, 255, 255, 0.03);
-  color: var(--text-muted);
-  font-size: 0.775rem;
-  font-weight: 600;
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #e2e8f0 !important;
+  font-size: 0.8rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.85rem 1rem;
+  padding: 0.9rem 1rem;
   border-bottom: 1px solid var(--border-subtle);
 }
 
 .table-dark-custom td {
   padding: 0.95rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: #f8fafc !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   vertical-align: middle;
 }
 
 .table-dark-custom tr:hover td {
-  background-color: rgba(59, 130, 246, 0.04);
+  background-color: rgba(59, 130, 246, 0.06);
 }
 
-/* Form Controls Dark */
-.form-control, .form-select {
-  background-color: #151f30 !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #f8fafc !important;
-  border-radius: 8px;
-  font-size: 0.925rem;
-  padding: 0.6rem 0.9rem;
-}
-
-.form-control:focus, .form-select:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25) !important;
-  background-color: #172338 !important;
-}
-
-.form-control::placeholder {
-  color: #64748b !important;
-}
-
-.form-label {
-  color: #cbd5e1;
-  font-weight: 500;
-  font-size: 0.875rem;
-  margin-bottom: 0.35rem;
-}
-
-/* Buttons */
+/* ========================================================
+   BUTTONS
+   ======================================================== */
 .btn-primary {
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
   border: none;
-  font-weight: 600;
+  font-weight: 700;
+  color: #ffffff !important;
   padding: 0.55rem 1.25rem;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35);
 }
 
 .btn-primary:hover {
   background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
+  color: #ffffff !important;
 }
 
 .btn-outline-secondary {
-  border-color: rgba(255, 255, 255, 0.15);
-  color: #cbd5e1;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #f8fafc !important;
+  background-color: rgba(255, 255, 255, 0.05);
+  font-weight: 600;
 }
 
 .btn-outline-secondary:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: #fff;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+}
+
+/* Modals */
+.modal-content {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+}
+
+.modal-header, .modal-footer {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+/* List group in Rule Engine checklist */
+.list-group-item {
+  color: #f8fafc !important;
+  background-color: transparent !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Card Preview Zoom */
@@ -303,7 +393,7 @@ body {
   top: 6px;
   bottom: 6px;
   width: 2px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .timeline-item {
