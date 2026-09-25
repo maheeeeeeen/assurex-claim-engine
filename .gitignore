@@ -54,7 +54,9 @@ frontend/dist/
 # Uploaded files
 backend/uploads/
 
-# Generated card images (too large for git)
+# Generated card images (bulk generation ~300MB, generate via backend/dataset_generator/generate_cards.py)
+sample_claims/cards/
+!sample_claims/cards/.gitkeep
 backend/data/cards/
 
 # Coverage
