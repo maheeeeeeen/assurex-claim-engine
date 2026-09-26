@@ -24,6 +24,8 @@ export const policiesAPI = {
 export const adminAPI = {
   getStatus: () => api.get('/api/admin/status'),
   seedDemo: () => api.post('/api/admin/seed'),
+  getModelComparison: () => api.get('/api/admin/model-comparison'),
+  getAnalytics: () => api.get('/api/admin/analytics'),
 };
 
 export default {

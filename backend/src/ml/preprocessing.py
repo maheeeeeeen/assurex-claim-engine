@@ -38,10 +38,6 @@ BOOLEAN_FEATURES = [
     "product_image_uploaded",
     "fault_evidence_uploaded",
     "repair_report_uploaded",
-    "serial_mismatch_flag",
-    "date_contradiction_flag",
-    "excluded_damage",
-    "duplicate_claim_flag",
 ]
 
 CATEGORICAL_FEATURES = [

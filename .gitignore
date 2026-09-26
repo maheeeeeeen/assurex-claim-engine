@@ -71,3 +71,10 @@ htmlcov/
 
 # Logs
 *.log
+
+# Temporary backup files and migration archives
+*.backup
+*.backup_*
+*backup_2500*
+backend/diagnose_step1.py
+backend/test_step4_policies.py

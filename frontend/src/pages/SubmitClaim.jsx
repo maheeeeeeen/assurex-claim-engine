@@ -231,6 +231,11 @@ export default function SubmitClaim() {
                       <option value="Appliances">Appliances</option>
                       <option value="Electronics">Electronics</option>
                       <option value="Automotive">Automotive</option>
+                      <option value="Smartphones & Mobile">Smartphones & Mobile</option>
+                      <option value="Computers & Laptops">Computers & Laptops</option>
+                      <option value="Wearables & Audio">Wearables & Audio</option>
+                      <option value="Home Office & Furniture">Home Office & Furniture</option>
+                      <option value="Power Tools & Hardware">Power Tools & Hardware</option>
                     </Form.Select>
                   </Col>
 

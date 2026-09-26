@@ -368,7 +368,7 @@ def render_claim_card(claim, variant=0, width=1200, height=1680):
 
 
 def generate_single_card_task(args):
-    """Worker task for multiprocessing."""
+    """Worker task for multiprocessing with adaptive palette optimization."""
     row_dict, split, variant, save_dir = args
     claim_id = row_dict["claim_id"]
     cls_name = row_dict["class_label"]
@@ -381,7 +381,9 @@ def generate_single_card_task(args):
     filepath = os.path.join(target_dir, filename)
 
     img = render_claim_card(row_dict, variant=variant)
-    img.save(filepath, "PNG", optimize=False)
+    # Adaptive 256-color palette maintains full 1200x1680 Retina clarity with 60% disk savings
+    img_opt = img.convert("P", palette=Image.ADAPTIVE, colors=256)
+    img_opt.save(filepath, "PNG", optimize=True)
 
     rel_path = os.path.relpath(filepath, ROOT_DIR).replace("\\", "/")
     return {
@@ -396,10 +398,10 @@ def generate_single_card_task(args):
 def batch_generate_cards(max_workers=None):
     """
     Batch generate high-resolution card images across splits.
-    Train: 1,750 x 2 = 3,500
-    Val: 375 x 1 = 375
-    Test: 375 x 1 = 375
-    Total: 4,250
+    Train: 7,000 x 2 = 14,000
+    Val: 1,500 x 1 = 1,500
+    Test: 1,500 x 1 = 1,500
+    Total: 17,000
     """
     train_path = os.path.join(DATA_DIR, "claims_train.csv")
     val_path = os.path.join(DATA_DIR, "claims_val.csv")

@@ -36,9 +36,23 @@ class TabularPredictor:
             return
 
         self.model_artifact = joblib.load(self.model_path)
-        self.model = self.model_artifact["model"]
-        self.preprocessor = self.model_artifact["preprocessor"]
-        self.model_name = self.model_artifact.get("model_name", "BestModel")
+        if isinstance(self.model_artifact, dict) and "model" in self.model_artifact:
+            self.model = self.model_artifact["model"]
+            self.preprocessor = self.model_artifact.get("preprocessor")
+            self.model_name = self.model_artifact.get("model_name", "BestModel")
+        else:
+            self.model = self.model_artifact
+            self.model_name = type(self.model).__name__
+            preprocessor_path = os.path.join(os.path.dirname(self.model_path), "preprocessor.joblib")
+            if os.path.exists(preprocessor_path):
+                self.preprocessor = joblib.load(preprocessor_path)
+
+        # Fallback preprocessor load if still missing
+        if self.preprocessor is None:
+            preprocessor_path = os.path.join(os.path.dirname(self.model_path), "preprocessor.joblib")
+            if os.path.exists(preprocessor_path):
+                self.preprocessor = joblib.load(preprocessor_path)
+
         print(f"[TabularPredictor] Successfully loaded {self.model_name} from {self.model_path}")
 
     @property

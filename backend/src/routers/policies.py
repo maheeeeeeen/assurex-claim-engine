@@ -15,17 +15,19 @@ THRESHOLDS_PATH = os.path.join(BASE_DIR, "config", "thresholds.json")
 
 @router.get("/")
 def get_all_policies():
-    """Returns active warranty policy configurations for all product categories."""
+    """Returns active warranty policy configurations for all product categories dynamically."""
     policies = {}
-    categories = ["electronics", "appliances", "automotive"]
-    for cat in categories:
-        fpath = os.path.join(POLICIES_DIR, f"{cat}_warranty.json")
-        if os.path.exists(fpath):
-            try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    policies[cat] = json.load(f)
-            except Exception:
-                pass
+    if os.path.exists(POLICIES_DIR):
+        for fname in sorted(os.listdir(POLICIES_DIR)):
+            if fname.endswith("_warranty.json"):
+                fpath = os.path.join(POLICIES_DIR, fname)
+                try:
+                    with open(fpath, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        cat = data.get("product_category", fname.replace("_warranty.json", "").replace("_", " ").title())
+                        policies[cat] = data
+                except Exception as e:
+                    print(f"Error loading {fname}: {e}")
     return policies
 
 
