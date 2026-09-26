@@ -60,6 +60,11 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((updatedUserData) => {
+    setUser(updatedUserData);
+    localStorage.setItem('assurex_user', JSON.stringify(updatedUserData));
+  }, []);
+
   const value = {
     user,
     token,
@@ -68,6 +73,7 @@ export function AuthProvider({ children }) {
     role: user?.role || null,
     login,
     logout,
+    updateUser,
   };
 
   return (

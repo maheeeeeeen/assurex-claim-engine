@@ -12,6 +12,7 @@ export default function Register() {
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
+    phone: '',
     password: '',
     confirmPassword: '',
     role: 'customer',
@@ -43,6 +44,7 @@ export default function Register() {
       await authAPI.register({
         full_name: formData.full_name,
         email: formData.email,
+        phone: formData.phone || undefined,
         password: formData.password,
         role: formData.role,
       });
@@ -103,10 +105,22 @@ export default function Register() {
                   />
                 </Form.Group>
 
+                <Form.Group className="mb-3" controlId="regPhone">
+                  <Form.Label>Phone Number <span className="text-muted small">(Optional)</span></Form.Label>
+                  <Form.Control
+                    type="tel"
+                    name="phone"
+                    placeholder="e.g. +1 (555) 019-2834"
+                    value={formData.phone}
+                    onChange={handleChange}
+                  />
+                </Form.Group>
+
                 <Form.Group className="mb-3" controlId="regRole">
                   <Form.Label>Account Role</Form.Label>
                   <Form.Select name="role" value={formData.role} onChange={handleChange}>
                     <option value="customer">Customer (Claimant)</option>
+                    <option value="employee">Employee (Company Staff)</option>
                     <option value="reviewer">Claim Reviewer / Adjuster</option>
                     <option value="admin">Administrator</option>
                   </Form.Select>

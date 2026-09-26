@@ -11,7 +11,8 @@ class UserRegister(BaseModel):
     email: str
     password: str
     full_name: str
-    role: Optional[str] = "customer"  # customer, reviewer, admin
+    phone: Optional[str] = None
+    role: Optional[str] = "customer"  # customer, employee, reviewer, admin
 
 
 class UserLogin(BaseModel):
@@ -20,12 +21,20 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     id: int
+    user_code: Optional[str] = None
     username: str
     email: str
     full_name: str
     role: str
+    phone: Optional[str] = None
     created_at: str
 
     class Config:

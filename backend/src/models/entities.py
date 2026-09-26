@@ -18,11 +18,13 @@ class User(SQLModel, table=True):
     __tablename__ = "users"
 
     id: Optional[int] = Field(default=None, primary_key=True)
+    user_code: Optional[str] = Field(default=None, unique=True, index=True)
     username: str = Field(unique=True, index=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
-    role: str = Field(default="customer", index=True)  # customer, reviewer, admin
+    role: str = Field(default="customer", index=True)  # customer, employee, reviewer, admin
     full_name: str
+    phone: Optional[str] = Field(default=None)
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
