@@ -33,7 +33,10 @@ import {
   FaImage,
   FaVideo,
   FaBarcode,
-  FaFingerprint
+  FaFingerprint,
+  FaCertificate,
+  FaFilePdf,
+  FaDownload
 } from 'react-icons/fa';
 
 export default function ClaimDetail() {
@@ -136,8 +139,9 @@ export default function ClaimDetail() {
   const faultVideoUrl = resolveMediaUrl(claim.fault_video_path);
   const barcodePhotoUrl = resolveMediaUrl(claim.barcode_image_path);
   const receiptDocUrl = resolveMediaUrl(claim.receipt_path);
+  const warrantyCardUrl = resolveMediaUrl(claim.warranty_card_path);
 
-  const hasAnyEvidence = Boolean(faultPhotoUrl || faultVideoUrl || barcodePhotoUrl || receiptDocUrl);
+  const hasAnyEvidence = Boolean(faultPhotoUrl || faultVideoUrl || barcodePhotoUrl || receiptDocUrl || warrantyCardUrl);
 
   return (
     <Container fluid className="px-4 py-4">
@@ -398,15 +402,100 @@ export default function ClaimDetail() {
                               SHA-256: {claim.receipt_hash}
                             </div>
                           )}
-                          <Button 
-                            variant="link" 
-                            size="sm" 
-                            className="p-0 text-decoration-none text-primary mt-1 small"
-                            style={{ fontSize: '0.72rem' }}
-                            onClick={() => setEvidencePreview({ url: receiptDocUrl, title: 'Purchase Receipt Document', type: 'image' })}
+                          <div className="d-flex align-items-center gap-3 mt-1">
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="p-0 text-decoration-none text-primary small"
+                              style={{ fontSize: '0.72rem' }}
+                              onClick={() => setEvidencePreview({ 
+                                url: receiptDocUrl, 
+                                title: 'Purchase Receipt Document', 
+                                isPdf: Boolean(claim.receipt_path?.toLowerCase().endsWith('.pdf'))
+                              })}
+                            >
+                              <FaSearchPlus size={10} className="me-1" /> View Full Resolution
+                            </Button>
+                            <a
+                              href={receiptDocUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="text-decoration-none text-info small d-flex align-items-center gap-1"
+                              style={{ fontSize: '0.72rem' }}
+                            >
+                              <FaDownload size={9} /> Download
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Official Warranty Certificate / Card */}
+                  {warrantyCardUrl && (
+                    <div className="p-2 rounded bg-surface border border-secondary border-opacity-25">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <span className="small text-light fw-semibold d-flex align-items-center gap-2">
+                          <FaCertificate className="text-warning" /> Warranty Certificate / Card
+                        </span>
+                        <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+                          <FaCheckCircle size={8} className="me-1" /> Attached
+                        </Badge>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 mt-2">
+                        {claim.warranty_card_path?.toLowerCase().endsWith('.pdf') ? (
+                          <div 
+                            className="rounded border border-secondary border-opacity-25 d-flex align-items-center justify-content-center bg-dark"
+                            style={{ width: '70px', height: '70px', cursor: 'pointer' }}
+                            onClick={() => setEvidencePreview({ url: warrantyCardUrl, title: 'Warranty Certificate / Card', isPdf: true })}
                           >
-                            <FaSearchPlus size={10} className="me-1" /> View Full Resolution
-                          </Button>
+                            <FaFilePdf size={32} className="text-danger" />
+                          </div>
+                        ) : (
+                          <img 
+                            src={warrantyCardUrl} 
+                            alt="Warranty Certificate / Card"
+                            className="rounded border border-secondary border-opacity-25"
+                            style={{ width: '70px', height: '70px', objectFit: 'cover', cursor: 'pointer' }}
+                            onClick={() => setEvidencePreview({ url: warrantyCardUrl, title: 'Warranty Certificate / Card', isPdf: false })}
+                          />
+                        )}
+                        <div className="flex-grow-1 overflow-hidden">
+                          <div className="text-truncate text-white small" title={claim.warranty_card_path}>
+                            {claim.warranty_card_path.split(/[\\/]/).pop()}
+                          </div>
+                          {claim.warranty_card_hash && (
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={claim.warranty_card_hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {claim.warranty_card_hash}
+                            </div>
+                          )}
+                          <div className="d-flex align-items-center gap-3 mt-1">
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="p-0 text-decoration-none text-primary small"
+                              style={{ fontSize: '0.72rem' }}
+                              onClick={() => setEvidencePreview({ 
+                                url: warrantyCardUrl, 
+                                title: 'Warranty Certificate / Card', 
+                                isPdf: Boolean(claim.warranty_card_path?.toLowerCase().endsWith('.pdf'))
+                              })}
+                            >
+                              <FaSearchPlus size={10} className="me-1" /> View Document
+                            </Button>
+                            <a
+                              href={warrantyCardUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download
+                              className="text-decoration-none text-info small d-flex align-items-center gap-1"
+                              style={{ fontSize: '0.72rem' }}
+                            >
+                              <FaDownload size={9} /> Download
+                            </a>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -827,21 +916,47 @@ export default function ClaimDetail() {
         </Modal.Header>
         <Modal.Body className="text-center p-3">
           {evidencePreview?.url && (
-            <img 
-              src={evidencePreview.url} 
-              alt={evidencePreview.title} 
-              className="img-fluid rounded border border-secondary border-opacity-25" 
-              style={{ maxHeight: '75vh', objectFit: 'contain' }}
-            />
+            evidencePreview.isPdf ? (
+              <div style={{ height: '70vh' }}>
+                <iframe 
+                  src={evidencePreview.url} 
+                  title={evidencePreview.title} 
+                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: '4px' }} 
+                />
+              </div>
+            ) : (
+              <img 
+                src={evidencePreview.url} 
+                alt={evidencePreview.title} 
+                className="img-fluid rounded border border-secondary border-opacity-25" 
+                style={{ maxHeight: '75vh', objectFit: 'contain' }}
+              />
+            )
           )}
         </Modal.Body>
         <Modal.Footer className="justify-content-between border-subtle">
           <small className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>
             Chain of Custody Document Viewer
           </small>
-          <Button variant="secondary" size="sm" onClick={() => setEvidencePreview(null)}>
-            Close
-          </Button>
+          <div className="d-flex align-items-center gap-2">
+            {evidencePreview?.url && (
+              <Button 
+                variant="outline-info" 
+                size="sm" 
+                as="a" 
+                href={evidencePreview.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                download
+                className="d-flex align-items-center gap-1"
+              >
+                <FaDownload size={11} /> Download Original
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" onClick={() => setEvidencePreview(null)}>
+              Close
+            </Button>
+          </div>
         </Modal.Footer>
       </Modal>
     </Container>

@@ -4,7 +4,11 @@ Validates authentication, claim submission, card generation, dual-AI adjudicatio
 """
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session, select
 from src.main import app
+from src.database_setup import engine
+from src.models import User, Product, Warranty
+from src.auth.service import hash_password
 
 client = TestClient(app)
 
@@ -34,6 +38,60 @@ def test_claim_stats():
     assert "dual_model_agreement_rate" in stats
 
 def test_full_claim_submission_and_adjudication():
+    # 0. Ensure customer and registered product with active warranty exist
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.username == "customer_mike")).first()
+        if not user:
+            user = User(
+                username="customer_mike",
+                email="mike@example.com",
+                hashed_password=hash_password("Customer@12345"),
+                role="customer",
+                full_name="Mike Customer",
+            )
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+
+        product = session.exec(select(Product).where(Product.product_id == "PRD-E2E-WM01")).first()
+        if not product:
+            product = Product(
+                product_id="PRD-E2E-WM01",
+                user_id=user.id,
+                name="LG Smart Washing Machine",
+                category="Appliances",
+                brand="LG",
+                model_number="WM4000HBA",
+                serial_number="SN-LG-98214",
+                purchase_price=899.99,
+                retailer="Home Depot",
+                purchase_date="2025-02-10",
+                status="Active",
+            )
+            session.add(product)
+            session.commit()
+            session.refresh(product)
+        elif product.user_id != user.id:
+            product.user_id = user.id
+            session.add(product)
+            session.commit()
+
+        warranty = session.exec(select(Warranty).where(Warranty.product_id == "PRD-E2E-WM01")).first()
+        if not warranty:
+            warranty = Warranty(
+                warranty_id="WAR-E2E-WM01",
+                product_id="PRD-E2E-WM01",
+                user_id=user.id,
+                coverage_type="Extended Warranty",
+                start_date="2025-02-10",
+                end_date="2027-02-10",
+                status="Active",
+                provider="LG Extended Care",
+            )
+            session.add(warranty)
+            session.commit()
+            session.refresh(warranty)
+
     # 1. Login as customer
     auth_res = client.post("/api/auth/login", json={"username": "customer_mike", "password": "Customer@12345"})
     token = auth_res.json()["access_token"]
@@ -41,6 +99,7 @@ def test_full_claim_submission_and_adjudication():
 
     # 2. Submit realistic claim
     claim_data = {
+        "product_id": "PRD-E2E-WM01",
         "product_name": "LG Smart Washing Machine",
         "product_category": "Appliances",
         "brand": "LG",

@@ -39,7 +39,9 @@ import {
   FaLink,
   FaUnlink,
   FaUndo,
-  FaExchangeAlt
+  FaExchangeAlt,
+  FaCertificate,
+  FaFilePdf
 } from 'react-icons/fa';
 
 const INITIAL_FORM_STATE = {
@@ -70,6 +72,8 @@ const INITIAL_FORM_STATE = {
   receipt_path: null,
   receipt_hash: null,
   serial_number_on_receipt: null,
+  warranty_card_path: null,
+  warranty_card_hash: null,
   fault_evidence_path: null,
   fault_evidence_hash: null,
   fault_video_path: null,
@@ -137,6 +141,18 @@ export default function SubmitClaim() {
     error: '',
   });
 
+  const [warrantyCard, setWarrantyCard] = useState({
+    file: null,
+    preview: null,
+    filename: '',
+    path: '',
+    hash: '',
+    size: 0,
+    isPdf: false,
+    loading: false,
+    error: '',
+  });
+
   // Form Fields — initialized genuinely empty without mock data
   const [formData, setFormData] = useState({ ...INITIAL_FORM_STATE });
 
@@ -149,8 +165,11 @@ export default function SubmitClaim() {
     const isVideo = mediaType === 'fault_video';
     const isPhoto = mediaType === 'fault_photo';
     const isBarcode = mediaType === 'barcode_photo';
+    const isWarranty = mediaType === 'warranty_card';
 
-    const setTarget = isPhoto ? setFaultPhoto : (isVideo ? setFaultVideo : setBarcodePhoto);
+    const setTarget = isPhoto 
+      ? setFaultPhoto 
+      : (isVideo ? setFaultVideo : (isBarcode ? setBarcodePhoto : setWarrantyCard));
     const maxSize = isVideo ? 35 * 1024 * 1024 : 15 * 1024 * 1024;
     const maxMb = isVideo ? 35 : 15;
 
@@ -168,7 +187,8 @@ export default function SubmitClaim() {
 
       const res = await claimsAPI.uploadMedia(data);
       const { file_path, file_hash, file_size, filename } = res.data;
-      const previewUrl = URL.createObjectURL(file);
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const previewUrl = isPdf ? null : URL.createObjectURL(file);
 
       setTarget({
         file,
@@ -177,6 +197,7 @@ export default function SubmitClaim() {
         path: file_path,
         hash: file_hash,
         size: file_size,
+        isPdf,
         loading: false,
         error: '',
       });
@@ -205,6 +226,13 @@ export default function SubmitClaim() {
           product_image_path: file_path,
           product_image_hash: file_hash,
         }));
+      } else if (isWarranty) {
+        setFormData((prev) => ({
+          ...prev,
+          warranty_card_path: file_path,
+          warranty_card_hash: file_hash,
+          warranty_card_uploaded: true,
+        }));
       }
     } catch (err) {
       console.error(`Upload error for ${mediaType}:`, err);
@@ -226,6 +254,10 @@ export default function SubmitClaim() {
       if (barcodePhoto.preview) URL.revokeObjectURL(barcodePhoto.preview);
       setBarcodePhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
       setFormData((prev) => ({ ...prev, barcode_image_path: null, barcode_image_hash: null, barcode_image_uploaded: false, product_image_uploaded: false, product_image_path: null, product_image_hash: null }));
+    } else if (mediaType === 'warranty_card') {
+      if (warrantyCard.preview) URL.revokeObjectURL(warrantyCard.preview);
+      setWarrantyCard({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, isPdf: false, loading: false, error: '' });
+      setFormData((prev) => ({ ...prev, warranty_card_path: null, warranty_card_hash: null, warranty_card_uploaded: false }));
     }
   };
 
@@ -329,10 +361,12 @@ export default function SubmitClaim() {
     if (faultPhoto.preview) URL.revokeObjectURL(faultPhoto.preview);
     if (faultVideo.preview) URL.revokeObjectURL(faultVideo.preview);
     if (barcodePhoto.preview) URL.revokeObjectURL(barcodePhoto.preview);
+    if (warrantyCard.preview) URL.revokeObjectURL(warrantyCard.preview);
 
     setFaultPhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
     setFaultVideo({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
     setBarcodePhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+    setWarrantyCard({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, isPdf: false, loading: false, error: '' });
 
     setReceiptFile(null);
     setOcrResult(null);
@@ -1430,12 +1464,93 @@ export default function SubmitClaim() {
                       </div>
                     )}
                   </div>
+
+                  {/* Slot 4: Warranty Card / Certificate */}
+                  <div className="p-2 mb-3 rounded bg-surface border border-secondary border-opacity-25">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <Form.Label className="small text-light mb-0 d-flex align-items-center gap-2 fw-semibold">
+                        <FaCertificate className="text-warning" /> Warranty Card / Certificate
+                      </Form.Label>
+                      <Badge bg="dark" className="border border-secondary text-muted" style={{ fontSize: '0.65rem' }}>
+                        PDF, JPG, PNG, WebP ≤ 15MB
+                      </Badge>
+                    </div>
+
+                    {!warrantyCard.path ? (
+                      <div>
+                        <Form.Control 
+                          type="file" 
+                          size="sm"
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
+                          disabled={warrantyCard.loading}
+                          onChange={(e) => handleMediaSlotUpload(e, 'warranty_card')}
+                        />
+                        {warrantyCard.loading && (
+                          <div className="mt-2 text-primary small d-flex align-items-center gap-2">
+                            <Spinner animation="border" size="sm" />
+                            Uploading & computing SHA-256 fingerprint...
+                          </div>
+                        )}
+                        {warrantyCard.error && (
+                          <div className="text-danger small mt-1" style={{ fontSize: '0.72rem' }}>
+                            {warrantyCard.error}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded bg-black bg-opacity-40 border border-success border-opacity-25">
+                        <div className="d-flex align-items-center gap-3">
+                          {warrantyCard.preview ? (
+                            <img 
+                              src={warrantyCard.preview} 
+                              alt="Warranty Card Preview" 
+                              className="rounded border border-secondary border-opacity-25"
+                              style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                            />
+                          ) : (
+                            <div 
+                              className="rounded border border-secondary border-opacity-25 d-flex align-items-center justify-content-center bg-dark"
+                              style={{ width: '60px', height: '60px' }}
+                            >
+                              <FaFilePdf size={28} className="text-danger" />
+                            </div>
+                          )}
+                          <div className="flex-grow-1 overflow-hidden">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="text-white small fw-semibold text-truncate" title={warrantyCard.filename}>
+                                {warrantyCard.filename}
+                              </span>
+                              <Badge bg="success" className="d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
+                                <FaCheckCircle size={9} /> Uploaded
+                              </Badge>
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.70rem' }}>
+                              {(warrantyCard.size / (1024 * 1024)).toFixed(2)} MB {warrantyCard.isPdf ? '(PDF Document)' : ''}
+                            </div>
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={warrantyCard.hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {warrantyCard.hash}
+                            </div>
+                          </div>
+                          <Button 
+                            variant="outline-danger" 
+                            size="sm" 
+                            className="p-1 px-2"
+                            title="Remove Warranty Card"
+                            onClick={() => handleRemoveMediaSlot('warranty_card')}
+                          >
+                            <FaTrash size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <hr className="border-secondary opacity-25" />
 
                 {/* Evidence Checklist */}
-                <div className="small fw-semibold text-muted mb-2">Evidence Attached Checkbox</div>
+                <div className="small fw-semibold text-muted mb-2">Evidence Attached Status</div>
                 <Form.Check 
                   type="checkbox"
                   id="chk-receipt"
@@ -1445,15 +1560,20 @@ export default function SubmitClaim() {
                   onChange={handleInputChange}
                   className="mb-2 small"
                 />
-                <Form.Check 
-                  type="checkbox"
-                  id="chk-war"
-                  name="warranty_card_uploaded"
-                  label="Warranty Certificate / Card Available"
-                  checked={formData.warranty_card_uploaded}
-                  onChange={handleInputChange}
-                  className="mb-2 small"
-                />
+                <div className="d-flex align-items-center justify-content-between mb-2 small text-light ps-1">
+                  <span className="d-flex align-items-center gap-2">
+                    <FaCertificate className="text-warning" size={12} /> Warranty Card / Certificate:
+                  </span>
+                  {formData.warranty_card_uploaded ? (
+                    <Badge bg="success" className="d-flex align-items-center gap-1" style={{ fontSize: '0.68rem' }}>
+                      <FaCheckCircle size={8} /> Attached
+                    </Badge>
+                  ) : (
+                    <Badge bg="dark" className="border border-secondary text-muted" style={{ fontSize: '0.68rem' }}>
+                      Not Attached
+                    </Badge>
+                  )}
+                </div>
                 <Form.Check 
                   type="checkbox"
                   id="chk-img"
