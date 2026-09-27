@@ -30,7 +30,11 @@ import {
   FaFingerprint,
   FaCheck,
   FaSyncAlt,
-  FaSearch
+  FaSearch,
+  FaVideo,
+  FaImage,
+  FaBarcode,
+  FaTrash
 } from 'react-icons/fa';
 
 export default function SubmitClaim() {
@@ -49,6 +53,40 @@ export default function SubmitClaim() {
   // Result modal state
   const [adjudicationResult, setAdjudicationResult] = useState(null);
   const [showResultModal, setShowResultModal] = useState(false);
+
+  // Evidence Media Upload Slots (Task 1)
+  const [faultPhoto, setFaultPhoto] = useState({
+    file: null,
+    preview: null,
+    filename: '',
+    path: '',
+    hash: '',
+    size: 0,
+    loading: false,
+    error: '',
+  });
+
+  const [faultVideo, setFaultVideo] = useState({
+    file: null,
+    preview: null,
+    filename: '',
+    path: '',
+    hash: '',
+    size: 0,
+    loading: false,
+    error: '',
+  });
+
+  const [barcodePhoto, setBarcodePhoto] = useState({
+    file: null,
+    preview: null,
+    filename: '',
+    path: '',
+    hash: '',
+    size: 0,
+    loading: false,
+    error: '',
+  });
 
   // Form Fields — initialized genuinely empty without mock data
   const [formData, setFormData] = useState({
@@ -78,7 +116,104 @@ export default function SubmitClaim() {
     receipt_path: null,
     receipt_hash: null,
     serial_number_on_receipt: null,
+    fault_evidence_path: null,
+    fault_evidence_hash: null,
+    fault_video_path: null,
+    fault_video_hash: null,
+    barcode_image_path: null,
+    barcode_image_hash: null,
+    product_image_path: null,
+    product_image_hash: null,
   });
+
+  const handleMediaSlotUpload = async (e, mediaType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    e.target.value = '';
+
+    const isVideo = mediaType === 'fault_video';
+    const isPhoto = mediaType === 'fault_photo';
+    const isBarcode = mediaType === 'barcode_photo';
+
+    const setTarget = isPhoto ? setFaultPhoto : (isVideo ? setFaultVideo : setBarcodePhoto);
+    const maxSize = isVideo ? 35 * 1024 * 1024 : 15 * 1024 * 1024;
+    const maxMb = isVideo ? 35 : 15;
+
+    if (file.size > maxSize) {
+      setTarget((prev) => ({ ...prev, error: `File exceeds maximum limit of ${maxMb}MB` }));
+      return;
+    }
+
+    setTarget((prev) => ({ ...prev, loading: true, error: '' }));
+
+    try {
+      const data = new FormData();
+      data.append('file', file);
+      data.append('media_type', mediaType);
+
+      const res = await claimsAPI.uploadMedia(data);
+      const { file_path, file_hash, file_size, filename } = res.data;
+      const previewUrl = URL.createObjectURL(file);
+
+      setTarget({
+        file,
+        preview: previewUrl,
+        filename: filename || file.name,
+        path: file_path,
+        hash: file_hash,
+        size: file_size,
+        loading: false,
+        error: '',
+      });
+
+      if (isPhoto) {
+        setFormData((prev) => ({
+          ...prev,
+          fault_evidence_path: file_path,
+          fault_evidence_hash: file_hash,
+          fault_evidence_uploaded: true,
+        }));
+      } else if (isVideo) {
+        setFormData((prev) => ({
+          ...prev,
+          fault_video_path: file_path,
+          fault_video_hash: file_hash,
+          fault_video_uploaded: true,
+        }));
+      } else if (isBarcode) {
+        setFormData((prev) => ({
+          ...prev,
+          barcode_image_path: file_path,
+          barcode_image_hash: file_hash,
+          barcode_image_uploaded: true,
+          product_image_uploaded: true,
+          product_image_path: file_path,
+          product_image_hash: file_hash,
+        }));
+      }
+    } catch (err) {
+      console.error(`Upload error for ${mediaType}:`, err);
+      const msg = err.response?.data?.detail || 'Failed to upload media file. Please try again.';
+      setTarget((prev) => ({ ...prev, loading: false, error: msg }));
+    }
+  };
+
+  const handleRemoveMediaSlot = (mediaType) => {
+    if (mediaType === 'fault_photo') {
+      if (faultPhoto.preview) URL.revokeObjectURL(faultPhoto.preview);
+      setFaultPhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+      setFormData((prev) => ({ ...prev, fault_evidence_path: null, fault_evidence_hash: null, fault_evidence_uploaded: false }));
+    } else if (mediaType === 'fault_video') {
+      if (faultVideo.preview) URL.revokeObjectURL(faultVideo.preview);
+      setFaultVideo({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+      setFormData((prev) => ({ ...prev, fault_video_path: null, fault_video_hash: null, fault_video_uploaded: false }));
+    } else if (mediaType === 'barcode_photo') {
+      if (barcodePhoto.preview) URL.revokeObjectURL(barcodePhoto.preview);
+      setBarcodePhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+      setFormData((prev) => ({ ...prev, barcode_image_path: null, barcode_image_hash: null, barcode_image_uploaded: false, product_image_uploaded: false, product_image_path: null, product_image_hash: null }));
+    }
+  };
 
   useEffect(() => {
     // Fetch products catalog for quick selection
@@ -559,6 +694,234 @@ export default function SubmitClaim() {
                       </Button>
                     </div>
                   )}
+                </div>
+
+                <hr className="border-secondary opacity-25" />
+
+                {/* Evidence Media Upload Slots (Task 1) */}
+                <div className="mb-3">
+                  <div className="small fw-bold text-white mb-2 d-flex align-items-center gap-2">
+                    <FaShieldAlt className="text-info" /> Cryptographic Evidence Media
+                  </div>
+                  <div className="text-muted small mb-3" style={{ fontSize: '0.75rem' }}>
+                    Upload physical evidence files below. Each file is verified and persisted with a cryptographic SHA-256 fingerprint to ensure chain of custody.
+                  </div>
+
+                  {/* Slot 1: Fault / Damage Photo */}
+                  <div className="p-2 mb-3 rounded bg-surface border border-secondary border-opacity-25">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <Form.Label className="small text-light mb-0 d-flex align-items-center gap-2 fw-semibold">
+                        <FaImage className="text-warning" /> Fault / Damage Photo
+                      </Form.Label>
+                      <Badge bg="dark" className="border border-secondary text-muted" style={{ fontSize: '0.65rem' }}>
+                        JPG, PNG, WebP ≤ 15MB
+                      </Badge>
+                    </div>
+
+                    {!faultPhoto.path ? (
+                      <div>
+                        <Form.Control 
+                          type="file" 
+                          size="sm"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={faultPhoto.loading}
+                          onChange={(e) => handleMediaSlotUpload(e, 'fault_photo')}
+                        />
+                        {faultPhoto.loading && (
+                          <div className="mt-2 text-primary small d-flex align-items-center gap-2">
+                            <Spinner animation="border" size="sm" />
+                            Uploading & computing SHA-256 fingerprint...
+                          </div>
+                        )}
+                        {faultPhoto.error && (
+                          <div className="text-danger small mt-1" style={{ fontSize: '0.72rem' }}>
+                            {faultPhoto.error}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded bg-black bg-opacity-40 border border-success border-opacity-25">
+                        <div className="d-flex align-items-center gap-3">
+                          <img 
+                            src={faultPhoto.preview} 
+                            alt="Fault Preview" 
+                            className="rounded border border-secondary border-opacity-25"
+                            style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                          />
+                          <div className="flex-grow-1 overflow-hidden">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="text-white small fw-semibold text-truncate" title={faultPhoto.filename}>
+                                {faultPhoto.filename}
+                              </span>
+                              <Badge bg="success" className="d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
+                                <FaCheckCircle size={9} /> Uploaded
+                              </Badge>
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.70rem' }}>
+                              {(faultPhoto.size / (1024 * 1024)).toFixed(2)} MB
+                            </div>
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={faultPhoto.hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {faultPhoto.hash}
+                            </div>
+                          </div>
+                          <Button 
+                            variant="outline-danger" 
+                            size="sm" 
+                            className="p-1 px-2"
+                            title="Remove Photo"
+                            onClick={() => handleRemoveMediaSlot('fault_photo')}
+                          >
+                            <FaTrash size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Slot 2: Fault / Damage Short Video */}
+                  <div className="p-2 mb-3 rounded bg-surface border border-secondary border-opacity-25">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <Form.Label className="small text-light mb-0 d-flex align-items-center gap-2 fw-semibold">
+                        <FaVideo className="text-danger" /> Fault / Damage Short Video
+                      </Form.Label>
+                      <Badge bg="dark" className="border border-secondary text-muted" style={{ fontSize: '0.65rem' }}>
+                        MP4, WebM, MOV ≤ 35MB
+                      </Badge>
+                    </div>
+
+                    {!faultVideo.path ? (
+                      <div>
+                        <Form.Control 
+                          type="file" 
+                          size="sm"
+                          accept="video/mp4,video/webm,video/quicktime"
+                          disabled={faultVideo.loading}
+                          onChange={(e) => handleMediaSlotUpload(e, 'fault_video')}
+                        />
+                        {faultVideo.loading && (
+                          <div className="mt-2 text-primary small d-flex align-items-center gap-2">
+                            <Spinner animation="border" size="sm" />
+                            Uploading video & computing SHA-256 fingerprint...
+                          </div>
+                        )}
+                        {faultVideo.error && (
+                          <div className="text-danger small mt-1" style={{ fontSize: '0.72rem' }}>
+                            {faultVideo.error}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded bg-black bg-opacity-40 border border-success border-opacity-25">
+                        <video 
+                          controls 
+                          src={faultVideo.preview}
+                          className="w-100 rounded mb-2 border border-secondary border-opacity-25"
+                          style={{ maxHeight: '160px', backgroundColor: '#000' }}
+                        />
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div className="overflow-hidden me-2">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="text-white small fw-semibold text-truncate" title={faultVideo.filename}>
+                                {faultVideo.filename}
+                              </span>
+                              <Badge bg="success" className="d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
+                                <FaCheckCircle size={9} /> Uploaded
+                              </Badge>
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.70rem' }}>
+                              {(faultVideo.size / (1024 * 1024)).toFixed(2)} MB
+                            </div>
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={faultVideo.hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {faultVideo.hash}
+                            </div>
+                          </div>
+                          <Button 
+                            variant="outline-danger" 
+                            size="sm" 
+                            className="p-1 px-2"
+                            title="Remove Video"
+                            onClick={() => handleRemoveMediaSlot('fault_video')}
+                          >
+                            <FaTrash size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Slot 3: Product Photo with Barcode / Serial Number */}
+                  <div className="p-2 mb-3 rounded bg-surface border border-secondary border-opacity-25">
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <Form.Label className="small text-light mb-0 d-flex align-items-center gap-2 fw-semibold">
+                        <FaBarcode className="text-info" /> Product Photo (Barcode / Serial Visible)
+                      </Form.Label>
+                      <Badge bg="dark" className="border border-secondary text-muted" style={{ fontSize: '0.65rem' }}>
+                        JPG, PNG, WebP ≤ 15MB
+                      </Badge>
+                    </div>
+
+                    {!barcodePhoto.path ? (
+                      <div>
+                        <Form.Control 
+                          type="file" 
+                          size="sm"
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={barcodePhoto.loading}
+                          onChange={(e) => handleMediaSlotUpload(e, 'barcode_photo')}
+                        />
+                        {barcodePhoto.loading && (
+                          <div className="mt-2 text-primary small d-flex align-items-center gap-2">
+                            <Spinner animation="border" size="sm" />
+                            Uploading & computing SHA-256 fingerprint...
+                          </div>
+                        )}
+                        {barcodePhoto.error && (
+                          <div className="text-danger small mt-1" style={{ fontSize: '0.72rem' }}>
+                            {barcodePhoto.error}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-2 rounded bg-black bg-opacity-40 border border-success border-opacity-25">
+                        <div className="d-flex align-items-center gap-3">
+                          <img 
+                            src={barcodePhoto.preview} 
+                            alt="Barcode Preview" 
+                            className="rounded border border-secondary border-opacity-25"
+                            style={{ width: '60px', height: '60px', objectFit: 'cover' }}
+                          />
+                          <div className="flex-grow-1 overflow-hidden">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="text-white small fw-semibold text-truncate" title={barcodePhoto.filename}>
+                                {barcodePhoto.filename}
+                              </span>
+                              <Badge bg="success" className="d-flex align-items-center gap-1" style={{ fontSize: '0.65rem' }}>
+                                <FaCheckCircle size={9} /> Uploaded
+                              </Badge>
+                            </div>
+                            <div className="text-muted" style={{ fontSize: '0.70rem' }}>
+                              {(barcodePhoto.size / (1024 * 1024)).toFixed(2)} MB
+                            </div>
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={barcodePhoto.hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {barcodePhoto.hash}
+                            </div>
+                          </div>
+                          <Button 
+                            variant="outline-danger" 
+                            size="sm" 
+                            className="p-1 px-2"
+                            title="Remove Barcode Photo"
+                            onClick={() => handleRemoveMediaSlot('barcode_photo')}
+                          >
+                            <FaTrash size={12} />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <hr className="border-secondary opacity-25" />

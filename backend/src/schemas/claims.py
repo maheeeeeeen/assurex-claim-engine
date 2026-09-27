@@ -30,12 +30,54 @@ class ClaimSubmitRequest(BaseModel):
     repair_history_count: int = 0
     previous_repair_authorized: bool = True
 
-    # Upload indicator flags (when submitting raw multipart or mocked paths)
-    receipt_uploaded: bool = True
-    warranty_card_uploaded: bool = True
-    product_image_uploaded: bool = True
-    fault_evidence_uploaded: bool = True
+    # Upload indicator flags & cryptographic document hashes
+    receipt_uploaded: bool = False
+    receipt_path: Optional[str] = None
+    receipt_hash: Optional[str] = None
+    serial_number_on_receipt: Optional[str] = None
+    warranty_card_uploaded: bool = False
+    warranty_card_path: Optional[str] = None
+    warranty_card_hash: Optional[str] = None
+    product_image_uploaded: bool = False
+    product_image_path: Optional[str] = None
+    product_image_hash: Optional[str] = None
+    fault_evidence_uploaded: bool = False
+    fault_evidence_path: Optional[str] = None
+    fault_evidence_hash: Optional[str] = None
+    fault_video_uploaded: bool = False
+    fault_video_path: Optional[str] = None
+    fault_video_hash: Optional[str] = None
+    barcode_image_uploaded: bool = False
+    barcode_image_path: Optional[str] = None
+    barcode_image_hash: Optional[str] = None
     repair_report_uploaded: bool = False
+    ocr_extracted_json: Optional[str] = None
+
+
+class MediaUploadResponse(BaseModel):
+    media_type: str
+    filename: str
+    file_path: str
+    file_url: str
+    file_hash: str
+    file_size: int
+    content_type: str
+
+
+class OCRProcessResponse(BaseModel):
+    merchant: Optional[str] = None
+    retailer: Optional[str] = None
+    purchase_date: Optional[str] = None
+    serial_number: Optional[str] = None
+    detected_serials: List[str] = []
+    purchase_amount: Optional[float] = None
+    ocr_confidence: float = 0.85
+    ocr_engine: str = "Tesseract_OCR"
+    file_hash: str
+    file_path: str
+    is_duplicate_file: bool = False
+    duplicate_claim_id: Optional[str] = None
+    raw_text: Optional[str] = None
 
 
 class ClaimAdjudicationAction(BaseModel):
@@ -82,9 +124,21 @@ class ClaimResponse(BaseModel):
     excluded_damage: bool
     duplicate_claim_flag: bool
 
-    # Paths
+    # Paths & Hashes
     card_image_path: Optional[str] = None
     receipt_path: Optional[str] = None
+    receipt_hash: Optional[str] = None
+    serial_number_on_receipt: Optional[str] = None
+    warranty_card_path: Optional[str] = None
+    warranty_card_hash: Optional[str] = None
+    product_image_path: Optional[str] = None
+    product_image_hash: Optional[str] = None
+    fault_evidence_path: Optional[str] = None
+    fault_evidence_hash: Optional[str] = None
+    fault_video_path: Optional[str] = None
+    fault_video_hash: Optional[str] = None
+    barcode_image_path: Optional[str] = None
+    barcode_image_hash: Optional[str] = None
 
     # Dual ML Predictions
     tabular_prediction: Optional[str] = None

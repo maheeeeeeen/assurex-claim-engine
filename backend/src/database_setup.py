@@ -47,6 +47,11 @@ def _migrate_sqlite_columns():
                 ("receipt_hash", "TEXT"),
                 ("warranty_card_hash", "TEXT"),
                 ("fault_evidence_hash", "TEXT"),
+                ("product_image_hash", "TEXT"),
+                ("fault_video_path", "TEXT"),
+                ("fault_video_hash", "TEXT"),
+                ("barcode_image_path", "TEXT"),
+                ("barcode_image_hash", "TEXT"),
             ]
             for col_name, col_type in new_cols:
                 if col_name not in existing_cols:

@@ -29,7 +29,11 @@ import {
   FaFileContract, 
   FaSearchPlus, 
   FaHistory, 
-  FaGavel 
+  FaGavel,
+  FaImage,
+  FaVideo,
+  FaBarcode,
+  FaFingerprint
 } from 'react-icons/fa';
 
 export default function ClaimDetail() {
@@ -43,6 +47,7 @@ export default function ClaimDetail() {
 
   // Zoom card modal state
   const [showCardModal, setShowCardModal] = useState(false);
+  const [evidencePreview, setEvidencePreview] = useState(null);
 
   // Reviewer adjudication action state
   const [actionChoice, setActionChoice] = useState('Approve');
@@ -117,8 +122,22 @@ export default function ClaimDetail() {
   const { claim, audit_logs, rule_evaluation, decision_reasons, tabular_probabilities, tm_probabilities } = dossier;
   const isReviewerOrAdmin = user?.role === 'reviewer' || user?.role === 'admin';
 
-  // Format image URL
+  // Format image & media URLs
+  const resolveMediaUrl = (path) => {
+    if (!path) return null;
+    if (path.startsWith('http://') || path.startsWith('https://')) return path;
+    const cleanPath = path.replace(/\\/g, '/');
+    const leading = cleanPath.startsWith('/') ? cleanPath.slice(1) : cleanPath;
+    return `http://localhost:8000/${leading}`;
+  };
+
   const cardUrl = claim.card_image_path ? `http://localhost:8000${claim.card_image_path}` : null;
+  const faultPhotoUrl = resolveMediaUrl(claim.fault_evidence_path);
+  const faultVideoUrl = resolveMediaUrl(claim.fault_video_path);
+  const barcodePhotoUrl = resolveMediaUrl(claim.barcode_image_path);
+  const receiptDocUrl = resolveMediaUrl(claim.receipt_path);
+
+  const hasAnyEvidence = Boolean(faultPhotoUrl || faultVideoUrl || barcodePhotoUrl || receiptDocUrl);
 
   return (
     <Container fluid className="px-4 py-4">
@@ -213,6 +232,187 @@ export default function ClaimDetail() {
               <div className="mt-3 p-2 rounded bg-surface border border-subtle small text-muted">
                 🛡️ <strong>Zero-Prediction Guarantee:</strong> Card contains exclusively factual claim metadata without labels, predictions, or scores to prevent neural model leakage.
               </div>
+            </Card.Body>
+          </Card>
+
+          {/* Evidence Media & Document Integrity Card (Task 1) */}
+          <Card className="mb-4">
+            <Card.Header className="d-flex justify-content-between align-items-center">
+              <span className="fw-bold d-flex align-items-center gap-2">
+                <FaShieldAlt className="text-info" /> Cryptographic Evidence Media
+              </span>
+              <Badge bg="dark" className="border border-secondary text-info fw-normal" style={{ fontSize: '0.65rem' }}>
+                SHA-256 Verified
+              </Badge>
+            </Card.Header>
+            <Card.Body className="p-3">
+              {!hasAnyEvidence ? (
+                <div className="text-center py-3 text-muted small">
+                  No additional physical evidence files attached to this claim intake.
+                </div>
+              ) : (
+                <div className="d-flex flex-column gap-3">
+                  {/* Fault / Damage Photo */}
+                  {faultPhotoUrl && (
+                    <div className="p-2 rounded bg-surface border border-secondary border-opacity-25">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <span className="small text-light fw-semibold d-flex align-items-center gap-2">
+                          <FaImage className="text-warning" /> Fault / Damage Photo
+                        </span>
+                        <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+                          <FaCheckCircle size={8} className="me-1" /> Attached
+                        </Badge>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 mt-2">
+                        <img 
+                          src={faultPhotoUrl} 
+                          alt="Fault Evidence"
+                          className="rounded border border-secondary border-opacity-25"
+                          style={{ width: '70px', height: '70px', objectFit: 'cover', cursor: 'pointer' }}
+                          onClick={() => setEvidencePreview({ url: faultPhotoUrl, title: 'Fault / Damage Photo Evidence', type: 'image' })}
+                        />
+                        <div className="flex-grow-1 overflow-hidden">
+                          <div className="text-truncate text-white small" title={claim.fault_evidence_path}>
+                            {claim.fault_evidence_path.split(/[\\/]/).pop()}
+                          </div>
+                          {claim.fault_evidence_hash && (
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={claim.fault_evidence_hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {claim.fault_evidence_hash}
+                            </div>
+                          )}
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="p-0 text-decoration-none text-primary mt-1 small"
+                            style={{ fontSize: '0.72rem' }}
+                            onClick={() => setEvidencePreview({ url: faultPhotoUrl, title: 'Fault / Damage Photo Evidence', type: 'image' })}
+                          >
+                            <FaSearchPlus size={10} className="me-1" /> View Full Resolution
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Fault / Damage Video */}
+                  {faultVideoUrl && (
+                    <div className="p-2 rounded bg-surface border border-secondary border-opacity-25">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="small text-light fw-semibold d-flex align-items-center gap-2">
+                          <FaVideo className="text-danger" /> Fault / Damage Video
+                        </span>
+                        <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+                          <FaCheckCircle size={8} className="me-1" /> Attached
+                        </Badge>
+                      </div>
+                      <video 
+                        controls 
+                        src={faultVideoUrl}
+                        className="w-100 rounded mb-2 border border-secondary border-opacity-25"
+                        style={{ maxHeight: '180px', backgroundColor: '#000' }}
+                      />
+                      <div className="overflow-hidden">
+                        <div className="text-truncate text-white small" title={claim.fault_video_path}>
+                          {claim.fault_video_path.split(/[\\/]/).pop()}
+                        </div>
+                        {claim.fault_video_hash && (
+                          <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={claim.fault_video_hash}>
+                            <FaFingerprint size={10} className="me-1" />
+                            SHA-256: {claim.fault_video_hash}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Product Photo with Barcode */}
+                  {barcodePhotoUrl && (
+                    <div className="p-2 rounded bg-surface border border-secondary border-opacity-25">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <span className="small text-light fw-semibold d-flex align-items-center gap-2">
+                          <FaBarcode className="text-info" /> Product & Barcode Photo
+                        </span>
+                        <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+                          <FaCheckCircle size={8} className="me-1" /> Attached
+                        </Badge>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 mt-2">
+                        <img 
+                          src={barcodePhotoUrl} 
+                          alt="Barcode Evidence"
+                          className="rounded border border-secondary border-opacity-25"
+                          style={{ width: '70px', height: '70px', objectFit: 'cover', cursor: 'pointer' }}
+                          onClick={() => setEvidencePreview({ url: barcodePhotoUrl, title: 'Product & Barcode Photo', type: 'image' })}
+                        />
+                        <div className="flex-grow-1 overflow-hidden">
+                          <div className="text-truncate text-white small" title={claim.barcode_image_path}>
+                            {claim.barcode_image_path.split(/[\\/]/).pop()}
+                          </div>
+                          {claim.barcode_image_hash && (
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={claim.barcode_image_hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {claim.barcode_image_hash}
+                            </div>
+                          )}
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="p-0 text-decoration-none text-primary mt-1 small"
+                            style={{ fontSize: '0.72rem' }}
+                            onClick={() => setEvidencePreview({ url: barcodePhotoUrl, title: 'Product & Barcode Photo', type: 'image' })}
+                          >
+                            <FaSearchPlus size={10} className="me-1" /> View Full Resolution
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Purchase Receipt Document */}
+                  {receiptDocUrl && (
+                    <div className="p-2 rounded bg-surface border border-secondary border-opacity-25">
+                      <div className="d-flex justify-content-between align-items-center mb-1">
+                        <span className="small text-light fw-semibold d-flex align-items-center gap-2">
+                          <FaFileContract className="text-primary" /> Purchase Receipt / Invoice
+                        </span>
+                        <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+                          <FaCheckCircle size={8} className="me-1" /> Attached
+                        </Badge>
+                      </div>
+                      <div className="d-flex align-items-center gap-3 mt-2">
+                        <img 
+                          src={receiptDocUrl} 
+                          alt="Purchase Receipt"
+                          className="rounded border border-secondary border-opacity-25"
+                          style={{ width: '70px', height: '70px', objectFit: 'cover', cursor: 'pointer' }}
+                          onClick={() => setEvidencePreview({ url: receiptDocUrl, title: 'Purchase Receipt Document', type: 'image' })}
+                        />
+                        <div className="flex-grow-1 overflow-hidden">
+                          <div className="text-truncate text-white small" title={claim.receipt_path}>
+                            {claim.receipt_path.split(/[\\/]/).pop()}
+                          </div>
+                          {claim.receipt_hash && (
+                            <div className="text-truncate text-info font-mono mt-1" style={{ fontSize: '0.68rem' }} title={claim.receipt_hash}>
+                              <FaFingerprint size={10} className="me-1" />
+                              SHA-256: {claim.receipt_hash}
+                            </div>
+                          )}
+                          <Button 
+                            variant="link" 
+                            size="sm" 
+                            className="p-0 text-decoration-none text-primary mt-1 small"
+                            style={{ fontSize: '0.72rem' }}
+                            onClick={() => setEvidencePreview({ url: receiptDocUrl, title: 'Purchase Receipt Document', type: 'image' })}
+                          >
+                            <FaSearchPlus size={10} className="me-1" /> View Full Resolution
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </Card.Body>
           </Card>
 
@@ -607,6 +807,39 @@ export default function ClaimDetail() {
             Rendered with zero prediction data per competition requirements
           </small>
           <Button variant="secondary" onClick={() => setShowCardModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Evidence Full-Res Zoom Modal */}
+      <Modal 
+        show={Boolean(evidencePreview)} 
+        onHide={() => setEvidencePreview(null)} 
+        size="lg" 
+        centered
+        contentClassName="bg-dark text-white border-subtle"
+      >
+        <Modal.Header closeButton closeVariant="white">
+          <Modal.Title className="font-mono fs-6">
+            {evidencePreview?.title}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center p-3">
+          {evidencePreview?.url && (
+            <img 
+              src={evidencePreview.url} 
+              alt={evidencePreview.title} 
+              className="img-fluid rounded border border-secondary border-opacity-25" 
+              style={{ maxHeight: '75vh', objectFit: 'contain' }}
+            />
+          )}
+        </Modal.Body>
+        <Modal.Footer className="justify-content-between border-subtle">
+          <small className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>
+            Chain of Custody Document Viewer
+          </small>
+          <Button variant="secondary" size="sm" onClick={() => setEvidencePreview(null)}>
             Close
           </Button>
         </Modal.Footer>

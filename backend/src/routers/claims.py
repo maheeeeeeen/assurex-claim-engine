@@ -14,15 +14,23 @@ import json
 import uuid
 from typing import List, Optional
 from datetime import datetime, date
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile, Form
 from sqlmodel import Session, select, func
 
 from src.database_setup import get_session
 from src.models import Claim, ClaimAuditLog, User
 from src.auth.service import get_current_user, require_role
-from src.schemas.claims import ClaimSubmitRequest, ClaimAdjudicationAction, ClaimResponse, ClaimStatsResponse
+from src.schemas.claims import (
+    ClaimSubmitRequest, 
+    ClaimAdjudicationAction, 
+    ClaimResponse, 
+    ClaimStatsResponse,
+    OCRProcessResponse,
+    MediaUploadResponse
+)
 from src.services.adjudication_engine import AdjudicationEngine
 from src.services.card_service import CardService
+from src.services.ocr_service import OCRService
 
 router = APIRouter()
 
@@ -35,6 +43,165 @@ def get_adjudication_engine() -> AdjudicationEngine:
     if _adjudication_engine is None:
         _adjudication_engine = AdjudicationEngine()
     return _adjudication_engine
+
+
+@router.post("/ocr-process", response_model=OCRProcessResponse)
+async def process_ocr(
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session)
+):
+    """
+    Accepts uploaded purchase receipt or invoice document, computes its cryptographic
+    SHA-256 hash fingerprint, executes OCR field extraction, and scans database for
+    duplicate document reuse.
+    """
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty"
+        )
+
+    # 1. Compute SHA-256 fingerprint
+    file_hash = OCRService.compute_sha256(contents)
+
+    # 2. Save file safely
+    upload_dir = os.path.join("uploads", "receipts")
+    os.makedirs(upload_dir, exist_ok=True)
+    file_ext = os.path.splitext(file.filename)[1] if file.filename else ".jpg"
+    safe_filename = f"receipt_{file_hash[:12]}{file_ext}"
+    file_path = os.path.join(upload_dir, safe_filename)
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # 3. Extract structured OCR data
+    ocr_result = OCRService.extract_from_image(file_path, file_bytes=contents)
+
+    # 4. Check for duplicate document hash in existing claims
+    existing_claim = session.exec(
+        select(Claim).where(Claim.receipt_hash == file_hash)
+    ).first()
+
+    is_duplicate = existing_claim is not None
+    dup_claim_id = existing_claim.claim_id if existing_claim else None
+
+    return {
+        "merchant": ocr_result.get("merchant") or ocr_result.get("retailer") or "Authorized Retailer",
+        "retailer": ocr_result.get("retailer") or ocr_result.get("merchant") or "Authorized Retailer",
+        "purchase_date": ocr_result.get("purchase_date"),
+        "serial_number": ocr_result.get("serial_number"),
+        "detected_serials": ocr_result.get("detected_serials", []),
+        "purchase_amount": ocr_result.get("purchase_amount"),
+        "ocr_confidence": ocr_result.get("ocr_confidence", 0.85),
+        "ocr_engine": ocr_result.get("ocr_engine", "Tesseract_OCR"),
+        "file_hash": file_hash,
+        "file_path": file_path.replace("\\", "/"),
+        "is_duplicate_file": is_duplicate,
+        "duplicate_claim_id": dup_claim_id,
+        "raw_text": ocr_result.get("raw_text"),
+    }
+
+
+@router.post("/upload-media", response_model=MediaUploadResponse)
+async def upload_media(
+    file: UploadFile = File(...),
+    media_type: str = Form(...)
+):
+    """
+    Accepts evidence uploads for fault photo, fault video, or barcode photo.
+    Validates file formats and size constraints, computes SHA-256 cryptographic hash,
+    and safely persists file to backend storage.
+    """
+    if not file or not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file was provided for upload"
+        )
+
+    allowed_configs = {
+        "fault_photo": {
+            "max_size": 15 * 1024 * 1024,  # 15MB
+            "exts": {".jpg", ".jpeg", ".png", ".webp"},
+            "subfolder": os.path.join("uploads", "evidence", "fault_photos"),
+        },
+        "fault_video": {
+            "max_size": 35 * 1024 * 1024,  # 35MB
+            "exts": {".mp4", ".webm", ".mov"},
+            "subfolder": os.path.join("uploads", "evidence", "fault_videos"),
+        },
+        "barcode_photo": {
+            "max_size": 15 * 1024 * 1024,  # 15MB
+            "exts": {".jpg", ".jpeg", ".png", ".webp"},
+            "subfolder": os.path.join("uploads", "evidence", "barcode_photos"),
+        },
+        "product_image": {
+            "max_size": 15 * 1024 * 1024,
+            "exts": {".jpg", ".jpeg", ".png", ".webp"},
+            "subfolder": os.path.join("uploads", "evidence", "product_images"),
+        },
+        "receipt": {
+            "max_size": 15 * 1024 * 1024,
+            "exts": {".jpg", ".jpeg", ".png", ".webp", ".pdf"},
+            "subfolder": os.path.join("uploads", "receipts"),
+        },
+        "warranty_card": {
+            "max_size": 15 * 1024 * 1024,
+            "exts": {".jpg", ".jpeg", ".png", ".webp", ".pdf"},
+            "subfolder": os.path.join("uploads", "evidence", "warranty_cards"),
+        },
+    }
+
+    if media_type not in allowed_configs:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid media_type '{media_type}'. Allowed types: {list(allowed_configs.keys())}"
+        )
+
+    config = allowed_configs[media_type]
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in config["exts"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file extension '{file_ext}' for {media_type}. Allowed: {', '.join(sorted(config['exts']))}"
+        )
+
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty"
+        )
+
+    if len(contents) > config["max_size"]:
+        max_mb = config["max_size"] / (1024 * 1024)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File exceeds maximum allowed size of {max_mb:.0f}MB"
+        )
+
+    # 1. Compute SHA-256 fingerprint
+    file_hash = OCRService.compute_sha256(contents)
+
+    # 2. Persist to storage safely
+    upload_dir = config["subfolder"]
+    os.makedirs(upload_dir, exist_ok=True)
+    safe_filename = f"{media_type}_{file_hash[:12]}{file_ext}"
+    file_path = os.path.join(upload_dir, safe_filename)
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    norm_path = file_path.replace("\\", "/")
+    return {
+        "media_type": media_type,
+        "filename": file.filename,
+        "file_path": norm_path,
+        "file_url": f"/{norm_path}",
+        "file_hash": file_hash,
+        "file_size": len(contents),
+        "content_type": file.content_type or "application/octet-stream"
+    }
 
 
 @router.post("/submit", response_model=ClaimResponse, status_code=status.HTTP_201_CREATED)
@@ -70,11 +237,32 @@ def submit_claim(
         remaining_days = 120.0
 
     # Calculate missing docs
+    has_receipt = claim_in.receipt_uploaded or bool(claim_in.receipt_path)
+    has_warranty = claim_in.warranty_card_uploaded or bool(claim_in.warranty_card_path)
+    has_product_img = claim_in.product_image_uploaded or bool(claim_in.product_image_path or claim_in.barcode_image_path)
+    has_fault_evidence = claim_in.fault_evidence_uploaded or bool(claim_in.fault_evidence_path or claim_in.fault_video_path)
+
     missing_docs = 0
-    if not claim_in.receipt_uploaded: missing_docs += 1
-    if not claim_in.warranty_card_uploaded: missing_docs += 1
-    if not claim_in.product_image_uploaded: missing_docs += 1
-    if not claim_in.fault_evidence_uploaded: missing_docs += 1
+    if not has_receipt: missing_docs += 1
+    if not has_warranty: missing_docs += 1
+    if not has_product_img: missing_docs += 1
+    if not has_fault_evidence: missing_docs += 1
+
+    # Cross-source serial reconciliation
+    receipt_sn = claim_in.serial_number_on_receipt or claim_in.serial_number_entered
+    serial_mismatch = False
+    if claim_in.serial_number_on_receipt and claim_in.serial_number_entered:
+        recon = OCRService.compare_serials(claim_in.serial_number_entered, claim_in.serial_number_on_receipt)
+        serial_mismatch = not recon["match"]
+
+    # Check for duplicate document hash in existing claims
+    is_duplicate_claim = False
+    if claim_in.receipt_hash:
+        existing_dup = session.exec(
+            select(Claim).where(Claim.receipt_hash == claim_in.receipt_hash)
+        ).first()
+        if existing_dup:
+            is_duplicate_claim = True
 
     claim_dict = {
         "claim_id": claim_id,
@@ -84,7 +272,7 @@ def submit_claim(
         "brand": claim_in.brand,
         "model_number": claim_in.model_number,
         "serial_number_entered": claim_in.serial_number_entered,
-        "serial_number_on_receipt": claim_in.serial_number_entered,
+        "serial_number_on_receipt": receipt_sn,
         "serial_number_on_warranty_card": claim_in.serial_number_entered,
         "purchase_date": claim_in.purchase_date,
         "purchase_price": claim_in.purchase_price,
@@ -102,16 +290,16 @@ def submit_claim(
         "remaining_warranty_days": remaining_days,
         "repair_history_count": claim_in.repair_history_count,
         "previous_repair_authorized": claim_in.previous_repair_authorized,
-        "receipt_uploaded": claim_in.receipt_uploaded,
-        "warranty_card_uploaded": claim_in.warranty_card_uploaded,
-        "product_image_uploaded": claim_in.product_image_uploaded,
-        "fault_evidence_uploaded": claim_in.fault_evidence_uploaded,
+        "receipt_uploaded": has_receipt,
+        "warranty_card_uploaded": has_warranty,
+        "product_image_uploaded": has_product_img,
+        "fault_evidence_uploaded": has_fault_evidence,
         "repair_report_uploaded": claim_in.repair_report_uploaded,
         "missing_doc_count": missing_docs,
-        "serial_mismatch_flag": False,
+        "serial_mismatch_flag": serial_mismatch,
         "date_contradiction_flag": False,
         "excluded_damage": False,
-        "duplicate_claim_flag": False,
+        "duplicate_claim_flag": is_duplicate_claim,
     }
 
     # 1. Run Complete Adjudication Engine
@@ -129,6 +317,7 @@ def submit_claim(
         brand=claim_in.brand,
         model_number=claim_in.model_number,
         serial_number_entered=claim_in.serial_number_entered,
+        serial_number_on_receipt=receipt_sn,
         purchase_date=claim_in.purchase_date,
         purchase_price=claim_in.purchase_price,
         retailer=claim_in.retailer,
@@ -145,13 +334,28 @@ def submit_claim(
         remaining_warranty_days=remaining_days,
         repair_history_count=claim_in.repair_history_count,
         previous_repair_authorized=claim_in.previous_repair_authorized,
-        receipt_uploaded=claim_in.receipt_uploaded,
-        warranty_card_uploaded=claim_in.warranty_card_uploaded,
-        product_image_uploaded=claim_in.product_image_uploaded,
-        fault_evidence_uploaded=claim_in.fault_evidence_uploaded,
+        receipt_uploaded=has_receipt,
+        receipt_path=claim_in.receipt_path,
+        receipt_hash=claim_in.receipt_hash,
+        warranty_card_uploaded=has_warranty,
+        warranty_card_path=claim_in.warranty_card_path,
+        warranty_card_hash=claim_in.warranty_card_hash,
+        product_image_uploaded=has_product_img,
+        product_image_path=claim_in.product_image_path,
+        product_image_hash=claim_in.product_image_hash,
+        fault_evidence_uploaded=has_fault_evidence,
+        fault_evidence_path=claim_in.fault_evidence_path,
+        fault_evidence_hash=claim_in.fault_evidence_hash,
+        fault_video_path=claim_in.fault_video_path,
+        fault_video_hash=claim_in.fault_video_hash,
+        barcode_image_path=claim_in.barcode_image_path,
+        barcode_image_hash=claim_in.barcode_image_hash,
         repair_report_uploaded=claim_in.repair_report_uploaded,
         missing_doc_count=missing_docs,
         card_image_path=card_image_rel_path,
+        serial_mismatch_flag=serial_mismatch,
+        duplicate_claim_flag=is_duplicate_claim,
+        ocr_extracted_json=claim_in.ocr_extracted_json,
         rule_evaluation_json=json.dumps(eval_result["rule_evaluation"]),
         tabular_prediction=eval_result["tabular_prediction"]["predicted_class"],
         tabular_confidence=eval_result["tabular_prediction"]["top_confidence"],
@@ -195,6 +399,40 @@ def submit_claim(
     session.add(log2)
     session.add(log3)
 
+    if serial_mismatch:
+        log_mismatch = ClaimAuditLog(
+            claim_id=claim_id,
+            actor="OCR_Reconciliation",
+            action="SERIAL_MISMATCH_DETECTED",
+            details=f"Entered serial '{claim_in.serial_number_entered}' does not match document serial '{receipt_sn}'.",
+        )
+        session.add(log_mismatch)
+
+    if is_duplicate_claim:
+        log_dup = ClaimAuditLog(
+            claim_id=claim_id,
+            actor="Document_Integrity",
+            action="DUPLICATE_DOCUMENT_DETECTED",
+            details=f"Receipt SHA-256 hash '{claim_in.receipt_hash[:16]}...' previously recorded in database.",
+        )
+        session.add(log_dup)
+
+    if claim_in.fault_evidence_path or claim_in.fault_video_path or claim_in.barcode_image_path:
+        attached_media = []
+        if claim_in.fault_evidence_path:
+            attached_media.append(f"Fault Photo ({claim_in.fault_evidence_hash[:8] if claim_in.fault_evidence_hash else 'verified'})")
+        if claim_in.fault_video_path:
+            attached_media.append(f"Fault Video ({claim_in.fault_video_hash[:8] if claim_in.fault_video_hash else 'verified'})")
+        if claim_in.barcode_image_path:
+            attached_media.append(f"Barcode Photo ({claim_in.barcode_image_hash[:8] if claim_in.barcode_image_hash else 'verified'})")
+        log_evidence = ClaimAuditLog(
+            claim_id=claim_id,
+            actor=actor_name,
+            action="EVIDENCE_ATTACHED",
+            details="Attached evidence media: " + ", ".join(attached_media),
+        )
+        session.add(log_evidence)
+
     session.commit()
     session.refresh(db_claim)
     return db_claim
@@ -207,9 +445,10 @@ def list_claims(
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 50,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
-    """Retrieves filterable list of claims."""
+    """Retrieves filterable list of claims, scoped by user role."""
     query = select(Claim)
 
     # Scoped access: Customers only see their own claims
@@ -330,14 +569,6 @@ def adjudicate_claim_manual(
     claim = session.exec(select(Claim).where(Claim.claim_id == claim_id)).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
-
-    # RBAC check: Customers cannot access claims belonging to other users
-    if current_user and current_user.role == "customer":
-        if claim.user_id and claim.user_id != current_user.id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Forbidden: You do not have permission to view this claim"
-            )
 
     action_raw = action_in.action or action_in.decision or "Approve"
     notes_raw = action_in.reviewer_notes or action_in.notes or ""

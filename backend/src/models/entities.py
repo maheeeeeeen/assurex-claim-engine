@@ -115,8 +115,13 @@ class Claim(SQLModel, table=True):
     warranty_card_path: Optional[str] = None
     warranty_card_hash: Optional[str] = Field(default=None, index=True)
     product_image_path: Optional[str] = None
+    product_image_hash: Optional[str] = Field(default=None, index=True)
     fault_evidence_path: Optional[str] = None
     fault_evidence_hash: Optional[str] = Field(default=None, index=True)
+    fault_video_path: Optional[str] = None
+    fault_video_hash: Optional[str] = Field(default=None, index=True)
+    barcode_image_path: Optional[str] = None
+    barcode_image_hash: Optional[str] = Field(default=None, index=True)
     card_image_path: Optional[str] = None  # 1200x1680 High-DPI Claim Summary Card
 
     # Anomaly flags

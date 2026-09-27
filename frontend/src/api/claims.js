@@ -23,6 +23,12 @@ export const claimsAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
+  // Upload evidence media (photo, video, barcode)
+  uploadMedia: (formData) =>
+    api.post('/api/claims/upload-media', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+
   // Adjuster decision on a claim
   adjudicateClaim: (claimId, payload) =>
     api.post(`/api/claims/${claimId}/adjudicate`, payload),
