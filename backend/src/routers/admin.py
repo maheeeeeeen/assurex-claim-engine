@@ -27,7 +27,10 @@ os.makedirs(CARDS_UPLOAD_DIR, exist_ok=True)
 
 
 @router.get("/status")
-def get_system_status(session: Session = Depends(get_session)):
+def get_system_status(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["admin"]))
+):
     """System health check, database row counts, and AI model readiness."""
     user_count = len(session.exec(select(User)).all())
     product_count = len(session.exec(select(Product)).all())
@@ -53,7 +56,10 @@ def get_system_status(session: Session = Depends(get_session)):
 
 
 @router.post("/seed")
-def seed_demo_data(session: Session = Depends(get_session)):
+def seed_demo_data(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["admin"]))
+):
     """
     Seeds essential initial users (Admin, Adjuster, Customer),
     catalog products, and 35 realistic claims from the test dataset.
@@ -250,7 +256,9 @@ def seed_demo_data(session: Session = Depends(get_session)):
 
 
 @router.get("/model-comparison")
-def get_model_comparison_report():
+def get_model_comparison_report(
+    current_user: User = Depends(require_role(["admin"]))
+):
     """
     Returns full 8-model performance benchmark metrics, comparison chart data,
     confusion matrices, and hyperparameter tuning results from reports/model_comparison.json.
@@ -334,7 +342,10 @@ def get_model_comparison_report():
 
 
 @router.get("/analytics")
-def get_claims_analytics_summary(session: Session = Depends(get_session)):
+def get_claims_analytics_summary(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["admin"]))
+):
     """
     Computes comprehensive claims adjudication metrics, outcome breakdowns,
     dual-AI agreement statistics, consistency statuses, confidence delta histograms,

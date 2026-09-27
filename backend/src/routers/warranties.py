@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from src.database_setup import get_session
-from src.models import Warranty, Product
+from src.models import Warranty, Product, User
+from src.auth.service import get_current_user
 
 router = APIRouter()
 
@@ -19,13 +20,19 @@ def list_warranties(
     category: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 150,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
     """
     List registered warranties enriched with associated product details,
     dynamically calculated remaining days, and expiry threshold alerts.
+    Scoped by user role: Customers only see their own warranties.
     """
-    warranties = session.exec(select(Warranty).order_by(Warranty.id.desc()).limit(limit)).all()
+    query = select(Warranty)
+    if current_user and current_user.role == "customer":
+        query = query.where(Warranty.user_id == current_user.id)
+
+    warranties = session.exec(query.order_by(Warranty.id.desc()).limit(limit)).all()
     today = datetime.utcnow().date()
 
     # Preload product map for O(1) enrichment
@@ -108,11 +115,23 @@ def list_warranties(
 
 
 @router.get("/check/{product_id}")
-def check_warranty(product_id: str, session: Session = Depends(get_session)):
+def check_warranty(
+    product_id: str,
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """Evaluate live warranty status for a product."""
     warranty = session.exec(select(Warranty).where(Warranty.product_id == product_id)).first()
     if not warranty:
         raise HTTPException(status_code=404, detail="Warranty not found for product")
+
+    # RBAC check: Customers cannot inspect warranties belonging to other users
+    if current_user and current_user.role == "customer":
+        if warranty.user_id and warranty.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You do not have permission to inspect this warranty"
+            )
 
     try:
         end_date = datetime.strptime(warranty.end_date[:10], "%Y-%m-%d").date()

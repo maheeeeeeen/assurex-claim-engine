@@ -35,8 +35,12 @@ function App() {
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/claims" element={<ClaimsList />} />
-                <Route path="/claims/submit" element={<SubmitClaim />} />
                 <Route path="/claims/:id" element={<ClaimDetail />} />
+              </Route>
+
+              {/* Protected routes — customer, employee, admin only (Reviewer blocked from submission & product registration) */}
+              <Route element={<ProtectedRoute allowedRoles={['customer', 'employee', 'admin']} />}>
+                <Route path="/claims/submit" element={<SubmitClaim />} />
                 <Route path="/products" element={<Products />} />
                 <Route path="/warranties" element={<Products />} />
               </Route>

@@ -11,7 +11,7 @@ from sqlmodel import Session, select
 
 from src.database_setup import get_session
 from src.models import Product, Warranty, ClaimAuditLog, User
-from src.auth.service import get_current_user
+from src.auth.service import get_current_user, require_role
 
 router = APIRouter()
 
@@ -28,6 +28,7 @@ class ProductCreate(BaseModel):
     warranty_duration_months: int = PydanticField(default=24, ge=1, le=120, description="Duration in months")
     warranty_provider: Optional[str] = "Manufacturer Standard"
     warranty_type: Optional[str] = "Standard"
+    user_id: Optional[int] = None
 
 
 @router.get("/")
@@ -35,10 +36,21 @@ def list_products(
     category: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 100,
-    session: Session = Depends(get_session)
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_current_user)
 ):
-    """List products with optional search and category filters."""
+    """List products with optional search and category filters, scoped by user role."""
     query = select(Product)
+
+    # Scoped access: Customers only see their own registered products
+    if current_user and current_user.role == "customer":
+        user_warranties = session.exec(select(Warranty.product_id).where(Warranty.user_id == current_user.id)).all()
+        owned_pids = set(user_warranties)
+        if owned_pids:
+            query = query.where((Product.user_id == current_user.id) | (Product.product_id.in_(list(owned_pids))))
+        else:
+            query = query.where(Product.user_id == current_user.id)
+
     if category and category != "all":
         query = query.where(Product.category == category)
     if search:
@@ -58,7 +70,7 @@ def list_products(
 def register_product(
     prod_in: ProductCreate,
     session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: User = Depends(require_role(["customer", "employee", "admin"]))
 ):
     """
     Registers a new product with auto-generated unique Product ID (PRD-YYYY-XXXX)
@@ -88,6 +100,9 @@ def register_product(
     today = datetime.utcnow().date()
     warranty_status = "Active" if end_dt >= today else "Expired"
 
+    # Determine owner user ID
+    owner_user_id = current_user.id if current_user.role == "customer" else (prod_in.user_id or current_user.id)
+
     # Create Product record
     product = Product(
         product_id=product_id,
@@ -100,6 +115,8 @@ def register_product(
         retailer=prod_in.retailer.strip(),
         purchase_date=start_dt.strftime("%Y-%m-%d"),
         warranty_duration_months=prod_in.warranty_duration_months,
+        warranty_status=warranty_status,
+        user_id=owner_user_id,
     )
     session.add(product)
 
@@ -109,7 +126,7 @@ def register_product(
     warranty = Warranty(
         warranty_id=warranty_id,
         product_id=product_id,
-        user_id=current_user.id if current_user else None,
+        user_id=owner_user_id,
         provider=provider_name,
         warranty_type=prod_in.warranty_type or "Standard",
         start_date=start_dt.strftime("%Y-%m-%d"),
@@ -141,13 +158,27 @@ def register_product(
 
 
 @router.get("/{product_id}")
-def get_product(product_id: str, session: Session = Depends(get_session)):
+def get_product(
+    product_id: str,
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """Retrieve product details and attached warranty terms."""
     product = session.exec(select(Product).where(Product.product_id == product_id)).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
     warranty = session.exec(select(Warranty).where(Warranty.product_id == product_id)).first()
+
+    # RBAC check: Customers cannot access products belonging to other users
+    if current_user and current_user.role == "customer":
+        is_owner = (product.user_id == current_user.id) or (warranty and warranty.user_id == current_user.id)
+        if not is_owner:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You do not have permission to view this product"
+            )
+
     return {
         "product": product,
         "warranty": warranty,

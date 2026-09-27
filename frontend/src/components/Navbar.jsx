@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Navbar, Nav, Container, Button, Badge } from 'react-bootstrap';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FaShieldAlt, FaPlusCircle, FaListAlt, FaTasks, FaCogs, FaSignOutAlt, FaBox, FaUser } from 'react-icons/fa';
+import { FaShieldAlt, FaPlusCircle, FaListAlt, FaTasks, FaCogs, FaSignOutAlt, FaBox, FaUser, FaFileContract } from 'react-icons/fa';
 import ProfileModal from './ProfileModal';
 
 export default function AppNavbar() {
@@ -56,28 +56,74 @@ export default function AppNavbar() {
                   <Nav.Link as={NavLink} to="/dashboard">
                     Dashboard
                   </Nav.Link>
-                  <Nav.Link as={NavLink} to="/claims">
-                    <FaListAlt className="me-1 mb-1" /> Claims
-                  </Nav.Link>
-                  <Nav.Link as={NavLink} to="/claims/submit" className="text-primary fw-bold">
-                    <FaPlusCircle className="me-1 mb-1" /> Submit Claim
-                  </Nav.Link>
-                  <Nav.Link as={NavLink} to="/products">
-                    <FaBox className="me-1 mb-1" /> Products
-                  </Nav.Link>
 
-                  {/* Reviewer / Admin Queue */}
-                  {(role === 'reviewer' || role === 'admin') && (
-                    <Nav.Link as={NavLink} to="/review-queue">
-                      <FaTasks className="me-1 mb-1 text-warning" /> Review Queue
-                    </Nav.Link>
+                  {/* CUSTOMER LINKS */}
+                  {role === 'customer' && (
+                    <>
+                      <Nav.Link as={NavLink} to="/claims">
+                        <FaListAlt className="me-1 mb-1" /> My Claims
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/claims/submit" className="text-primary fw-bold">
+                        <FaPlusCircle className="me-1 mb-1" /> Submit Claim
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/products">
+                        <FaBox className="me-1 mb-1" /> My Products
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/warranties">
+                        <FaFileContract className="me-1 mb-1" /> My Warranties
+                      </Nav.Link>
+                    </>
                   )}
 
-                  {/* Admin Management */}
+                  {/* EMPLOYEE LINKS */}
+                  {role === 'employee' && (
+                    <>
+                      <Nav.Link as={NavLink} to="/claims">
+                        <FaListAlt className="me-1 mb-1" /> Claims (Assisted Intake)
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/claims/submit" className="text-primary fw-bold">
+                        <FaPlusCircle className="me-1 mb-1" /> Submit Claim
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/products">
+                        <FaBox className="me-1 mb-1" /> Products
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/warranties">
+                        <FaFileContract className="me-1 mb-1" /> Warranties
+                      </Nav.Link>
+                    </>
+                  )}
+
+                  {/* REVIEWER LINKS */}
+                  {role === 'reviewer' && (
+                    <>
+                      <Nav.Link as={NavLink} to="/review-queue">
+                        <FaTasks className="me-1 mb-1 text-warning" /> Review Queue
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/claims">
+                        <FaListAlt className="me-1 mb-1" /> Claims (Read-Only)
+                      </Nav.Link>
+                    </>
+                  )}
+
+                  {/* ADMIN LINKS */}
                   {role === 'admin' && (
-                    <Nav.Link as={NavLink} to="/admin">
-                      <FaCogs className="me-1 mb-1 text-info" /> Admin
-                    </Nav.Link>
+                    <>
+                      <Nav.Link as={NavLink} to="/admin">
+                        <FaCogs className="me-1 mb-1 text-info" /> Admin
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/claims">
+                        <FaListAlt className="me-1 mb-1" /> Claims
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/claims/submit" className="text-primary fw-bold">
+                        <FaPlusCircle className="me-1 mb-1" /> Submit Claim
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/products">
+                        <FaBox className="me-1 mb-1" /> Products & Warranties
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/review-queue">
+                        <FaTasks className="me-1 mb-1 text-warning" /> Review Queue
+                      </Nav.Link>
+                    </>
                   )}
                 </Nav>
 

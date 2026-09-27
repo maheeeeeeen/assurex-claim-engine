@@ -41,7 +41,7 @@ def get_adjudication_engine() -> AdjudicationEngine:
 def submit_claim(
     claim_in: ClaimSubmitRequest,
     session: Session = Depends(get_session),
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: User = Depends(require_role(["customer", "employee", "admin"]))
 ):
     """
     Submits a warranty claim, triggers dynamic card generation, runs dual-model AI
@@ -212,6 +212,10 @@ def list_claims(
     """Retrieves filterable list of claims."""
     query = select(Claim)
 
+    # Scoped access: Customers only see their own claims
+    if current_user and current_user.role == "customer":
+        query = query.where(Claim.user_id == current_user.id)
+
     if status and status != "all":
         query = query.where(Claim.adjudication_status == status)
     if category and category != "all":
@@ -280,11 +284,23 @@ def get_claim_stats(session: Session = Depends(get_session)):
 
 
 @router.get("/{claim_id}")
-def get_claim_detail(claim_id: str, session: Session = Depends(get_session)):
+def get_claim_detail(
+    claim_id: str,
+    session: Session = Depends(get_session),
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """Retrieves full claim dossier, attached audit logs, and explanation JSON."""
     claim = session.exec(select(Claim).where(Claim.claim_id == claim_id)).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+
+    # RBAC check: Customers cannot access claims belonging to other users
+    if current_user and current_user.role == "customer":
+        if claim.user_id and claim.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You do not have permission to view this claim"
+            )
 
     audit_logs = session.exec(
         select(ClaimAuditLog).where(ClaimAuditLog.claim_id == claim_id).order_by(ClaimAuditLog.id.asc())
@@ -314,6 +330,14 @@ def adjudicate_claim_manual(
     claim = session.exec(select(Claim).where(Claim.claim_id == claim_id)).first()
     if not claim:
         raise HTTPException(status_code=404, detail="Claim not found")
+
+    # RBAC check: Customers cannot access claims belonging to other users
+    if current_user and current_user.role == "customer":
+        if claim.user_id and claim.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You do not have permission to view this claim"
+            )
 
     action_raw = action_in.action or action_in.decision or "Approve"
     notes_raw = action_in.reviewer_notes or action_in.notes or ""
