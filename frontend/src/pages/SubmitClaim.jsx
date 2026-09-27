@@ -17,7 +17,7 @@ import {
   Modal 
 } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
-import { claimsAPI, productsAPI } from '../api';
+import { claimsAPI, productsAPI, warrantiesAPI } from '../api';
 import { 
   FaShieldAlt, 
   FaUpload, 
@@ -34,14 +34,60 @@ import {
   FaVideo,
   FaImage,
   FaBarcode,
-  FaTrash
+  FaTrash,
+  FaLink,
+  FaUnlink,
+  FaUndo,
+  FaExchangeAlt
 } from 'react-icons/fa';
+
+const INITIAL_FORM_STATE = {
+  product_id: null,
+  product_name: '',
+  product_category: '',
+  brand: '',
+  model_number: '',
+  serial_number_entered: '',
+  purchase_price: '',
+  retailer: '',
+  purchase_date: '',
+  warranty_start: '',
+  warranty_end: '',
+  warranty_provider: '',
+  warranty_type: '',
+  fault_date: '',
+  fault_type: '',
+  damage_type: '',
+  fault_description: '',
+  repair_history_count: 0,
+  previous_repair_authorized: false,
+  receipt_uploaded: false,
+  warranty_card_uploaded: false,
+  product_image_uploaded: false,
+  fault_evidence_uploaded: false,
+  repair_report_uploaded: false,
+  receipt_path: null,
+  receipt_hash: null,
+  serial_number_on_receipt: null,
+  fault_evidence_path: null,
+  fault_evidence_hash: null,
+  fault_video_path: null,
+  fault_video_hash: null,
+  barcode_image_path: null,
+  barcode_image_hash: null,
+  product_image_path: null,
+  product_image_hash: null,
+};
 
 export default function SubmitClaim() {
   const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [linkedProduct, setLinkedProduct] = useState(null);
+  const [pendingProduct, setPendingProduct] = useState(null);
+  const [showOverwriteModal, setShowOverwriteModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -89,42 +135,7 @@ export default function SubmitClaim() {
   });
 
   // Form Fields — initialized genuinely empty without mock data
-  const [formData, setFormData] = useState({
-    product_name: '',
-    product_category: '',
-    brand: '',
-    model_number: '',
-    serial_number_entered: '',
-    purchase_price: '',
-    retailer: '',
-    purchase_date: '',
-    warranty_start: '',
-    warranty_end: '',
-    warranty_provider: '',
-    warranty_type: '',
-    fault_date: '',
-    fault_type: '',
-    damage_type: '',
-    fault_description: '',
-    repair_history_count: 0,
-    previous_repair_authorized: true,
-    receipt_uploaded: false,
-    warranty_card_uploaded: false,
-    product_image_uploaded: false,
-    fault_evidence_uploaded: false,
-    repair_report_uploaded: false,
-    receipt_path: null,
-    receipt_hash: null,
-    serial_number_on_receipt: null,
-    fault_evidence_path: null,
-    fault_evidence_hash: null,
-    fault_video_path: null,
-    fault_video_hash: null,
-    barcode_image_path: null,
-    barcode_image_hash: null,
-    product_image_path: null,
-    product_image_hash: null,
-  });
+  const [formData, setFormData] = useState({ ...INITIAL_FORM_STATE });
 
   const handleMediaSlotUpload = async (e, mediaType) => {
     const file = e.target.files?.[0];
@@ -216,39 +227,174 @@ export default function SubmitClaim() {
   };
 
   useEffect(() => {
-    // Fetch products catalog for quick selection
-    const loadProducts = async () => {
+    // Fetch user products and warranties in parallel, enriching products with warranty coverage dates
+    const loadProductsAndWarranties = async () => {
       try {
-        const res = await productsAPI.getProducts();
-        setProducts(res.data || []);
+        const [prodRes, warRes] = await Promise.allSettled([
+          productsAPI.getProducts(),
+          warrantiesAPI.getWarranties(),
+        ]);
+
+        const prodList = prodRes.status === 'fulfilled' ? (prodRes.value.data || []) : [];
+        const warList = warRes.status === 'fulfilled' ? (warRes.value.data || []) : [];
+
+        const warrantyMap = {};
+        warList.forEach((w) => {
+          if (w.product_id) {
+            warrantyMap[w.product_id] = w;
+          }
+        });
+
+        const enriched = prodList.map((p) => {
+          const war = warrantyMap[p.product_id];
+          return {
+            ...p,
+            warranty_id: war?.warranty_id || null,
+            warranty_start: war?.start_date || p.purchase_date || '',
+            warranty_end: war?.end_date || '',
+            warranty_provider: war?.provider || '',
+            warranty_type: war?.warranty_type || 'Manufacturer Standard',
+            warranty_status: war?.calculated_status || war?.status || 'Active',
+          };
+        });
+
+        setProducts(enriched);
       } catch (err) {
-        console.error('Failed to load products list:', err);
+        console.error('Failed to load products and warranties:', err);
       }
     };
-    loadProducts();
+    loadProductsAndWarranties();
   }, []);
 
-  const handleProductSelect = (e) => {
-    const pid = e.target.value;
-    setSelectedProductId(pid);
-    if (!pid) return;
+  // Check if form has user-entered data before overwriting
+  const hasExistingData = () => {
+    const fieldsToCheck = [
+      'product_name', 'brand', 'model_number', 'serial_number_entered',
+      'purchase_price', 'retailer', 'purchase_date', 'warranty_start',
+      'warranty_end', 'warranty_provider', 'warranty_type', 'product_category'
+    ];
+    return fieldsToCheck.some((f) => (formData[f] ?? '').toString().trim() !== '');
+  };
 
-    const prod = products.find((p) => p.product_id === pid);
-    if (prod) {
-      setFormData((prev) => ({
-        ...prev,
-        product_name: prod.name,
-        product_category: prod.category,
-        brand: prod.brand,
-        model_number: prod.model_number,
-        serial_number_entered: prod.serial_number || prev.serial_number_entered,
-        purchase_price: prod.purchase_price || prev.purchase_price,
-        retailer: prod.retailer || prev.retailer,
-        purchase_date: prod.purchase_date || prev.purchase_date,
-        warranty_start: prod.purchase_date || prev.warranty_start,
-      }));
+  // Trigger autofill with overwrite protection
+  const handleTriggerAutofill = () => {
+    if (!selectedProductId) return;
+    const prod = products.find((p) => p.product_id === selectedProductId);
+    if (!prod) return;
+
+    if (hasExistingData()) {
+      setPendingProduct(prod);
+      setShowOverwriteModal(true);
+    } else {
+      applyAutofill(prod);
     }
   };
+
+  // Apply registered product & warranty specifications to form
+  const applyAutofill = (prod) => {
+    setFormData((prev) => ({
+      ...prev,
+      product_id: prod.product_id,
+      product_name: prod.name || '',
+      product_category: prod.category || '',
+      brand: prod.brand || '',
+      model_number: prod.model_number || '',
+      serial_number_entered: prod.serial_number || '',
+      purchase_price: prod.purchase_price !== undefined && prod.purchase_price !== null ? prod.purchase_price : '',
+      retailer: prod.retailer || '',
+      purchase_date: prod.purchase_date || '',
+      warranty_start: prod.warranty_start || prod.purchase_date || '',
+      warranty_end: prod.warranty_end || '',
+      warranty_provider: prod.warranty_provider || '',
+      warranty_type: prod.warranty_type || 'Manufacturer Standard',
+    }));
+
+    setLinkedProduct(prod);
+    setShowOverwriteModal(false);
+    setPendingProduct(null);
+  };
+
+  // Detach product link while preserving current field values
+  const handleUnlinkProduct = () => {
+    setLinkedProduct(null);
+    setSelectedProductId('');
+    setFormData((prev) => ({ ...prev, product_id: null }));
+  };
+
+  // Full form reset to genuine empty defaults
+  const handleConfirmReset = () => {
+    if (faultPhoto.preview) URL.revokeObjectURL(faultPhoto.preview);
+    if (faultVideo.preview) URL.revokeObjectURL(faultVideo.preview);
+    if (barcodePhoto.preview) URL.revokeObjectURL(barcodePhoto.preview);
+
+    setFaultPhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+    setFaultVideo({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+    setBarcodePhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
+
+    setReceiptFile(null);
+    setOcrResult(null);
+    setOcrLoading(false);
+    setSelectedProductId('');
+    setLinkedProduct(null);
+    setPendingProduct(null);
+    setFormData({ ...INITIAL_FORM_STATE });
+    setError('');
+    setShowResetModal(false);
+  };
+
+  // Calculate discrepancies between entered form values and linked product specifications
+  const fieldLabels = {
+    product_name: 'Product Name',
+    brand: 'Brand',
+    model_number: 'Model Number',
+    serial_number_entered: 'Hardware Serial Number',
+    product_category: 'Category',
+    purchase_price: 'Purchase Price',
+    retailer: 'Retailer',
+    purchase_date: 'Date of Purchase',
+    warranty_start: 'Warranty Start Date',
+    warranty_end: 'Warranty Expiration Date',
+    warranty_provider: 'Warranty Provider',
+    warranty_type: 'Coverage Type',
+  };
+
+  const fieldMismatches = (() => {
+    if (!linkedProduct) return {};
+    const mismatches = {};
+
+    const check = (formKey, origVal) => {
+      const cur = (formData[formKey] ?? '').toString().trim();
+      const orig = (origVal ?? '').toString().trim();
+      if (orig && cur !== orig) {
+        mismatches[formKey] = { current: cur, original: orig };
+      }
+    };
+
+    check('product_name', linkedProduct.name);
+    check('product_category', linkedProduct.category);
+    check('brand', linkedProduct.brand);
+    check('model_number', linkedProduct.model_number);
+    check('serial_number_entered', linkedProduct.serial_number);
+    check('retailer', linkedProduct.retailer);
+    check('purchase_date', linkedProduct.purchase_date);
+    check('warranty_start', linkedProduct.warranty_start);
+    check('warranty_end', linkedProduct.warranty_end);
+    check('warranty_provider', linkedProduct.warranty_provider);
+    check('warranty_type', linkedProduct.warranty_type);
+
+    if (linkedProduct.purchase_price !== undefined && linkedProduct.purchase_price !== null && linkedProduct.purchase_price !== '') {
+      const curPrice = parseFloat(formData.purchase_price);
+      const origPrice = parseFloat(linkedProduct.purchase_price);
+      if (!isNaN(curPrice) && !isNaN(origPrice) && curPrice !== origPrice) {
+        mismatches.purchase_price = {
+          current: formData.purchase_price,
+          original: `$${origPrice.toFixed(2)}`,
+        };
+      }
+    }
+
+    return mismatches;
+  })();
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -350,32 +496,117 @@ export default function SubmitClaim() {
 
       {error && <Alert variant="danger" dismissible onClose={() => setError('')}>{error}</Alert>}
 
+      {/* Top Action Panel: Registered Product Quick-Link & Form Controls */}
+      <Card className="mb-4 border-primary border-opacity-25 bg-surface">
+        <Card.Body className="p-3">
+          <Row className="align-items-center g-3">
+            <Col lg={8}>
+              <div className="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+                <Form.Label className="small text-light mb-0 fw-semibold text-nowrap d-flex align-items-center gap-2">
+                  <FaShieldAlt className="text-primary" /> Registered Product:
+                </Form.Label>
+                <Form.Select 
+                  id="registered-product-select"
+                  size="sm"
+                  value={selectedProductId}
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  className="bg-dark text-white border-secondary"
+                  style={{ minWidth: 260 }}
+                >
+                  <option value="">-- Choose a registered product --</option>
+                  {products.map((p) => (
+                    <option key={p.product_id} value={p.product_id}>
+                      {p.product_id} — {p.name} ({p.brand}) [{p.warranty_status || 'Registered'}]
+                    </option>
+                  ))}
+                </Form.Select>
+                <Button 
+                  id="btn-autofill-product"
+                  variant="primary" 
+                  size="sm" 
+                  className="text-nowrap d-flex align-items-center gap-2"
+                  disabled={!selectedProductId}
+                  onClick={handleTriggerAutofill}
+                >
+                  <FaLink size={12} />
+                  <span>Autofill Product & Warranty Details</span>
+                </Button>
+              </div>
+            </Col>
+            <Col lg={4} className="text-lg-end">
+              <Button 
+                id="btn-reset-form-top"
+                variant="outline-secondary" 
+                size="sm"
+                className="d-inline-flex align-items-center gap-2 text-muted"
+                onClick={() => setShowResetModal(true)}
+              >
+                <FaUndo size={11} />
+                <span>Reset Form</span>
+              </Button>
+            </Col>
+          </Row>
+
+          {/* Linked Product Active Indicator */}
+          {linkedProduct && (
+            <div className="mt-3 p-2 px-3 rounded bg-info bg-opacity-10 border border-info border-opacity-25 d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
+              <div className="d-flex align-items-center gap-2 small">
+                <Badge bg="info" className="text-dark fw-bold">
+                  <FaLink size={10} className="me-1" /> LINKED
+                </Badge>
+                <span className="text-white">
+                  Linked to Product <strong className="font-mono text-info">{linkedProduct.product_id}</strong> — {linkedProduct.name} ({linkedProduct.brand})
+                </span>
+                <span className="text-muted font-mono" style={{ fontSize: '0.75rem' }}>
+                  [SN: {linkedProduct.serial_number}]
+                </span>
+              </div>
+              <div className="d-flex align-items-center gap-2">
+                <Button 
+                  size="sm" 
+                  variant="outline-info" 
+                  className="py-0 px-2"
+                  style={{ fontSize: '0.75rem' }}
+                  onClick={() => {
+                    const el = document.getElementById('registered-product-select');
+                    if (el) el.focus();
+                  }}
+                >
+                  <FaExchangeAlt size={10} className="me-1" /> Change Product
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline-danger" 
+                  className="py-0 px-2"
+                  style={{ fontSize: '0.75rem' }}
+                  onClick={handleUnlinkProduct}
+                >
+                  <FaUnlink size={10} className="me-1" /> Unlink
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Soft Mismatch Warning Banner */}
+          {linkedProduct && Object.keys(fieldMismatches).length > 0 && (
+            <Alert variant="warning" className="mt-3 mb-0 py-2 px-3 small border-0 bg-warning bg-opacity-10 text-warning d-flex align-items-start gap-2">
+              <FaExclamationTriangle className="flex-shrink-0 mt-1" />
+              <div>
+                <strong>Modified from registered product data:</strong> You have edited {Object.keys(fieldMismatches).length} field(s) away from the registered specs ({Object.keys(fieldMismatches).map((k) => fieldLabels[k] || k).join(', ')}). This will not block submission, but discrepancies may require manual review by an adjudicator.
+              </div>
+            </Alert>
+          )}
+        </Card.Body>
+      </Card>
+
       <Form onSubmit={handleSubmit}>
         <Row className="g-4">
           {/* Left Column: Product & Incident Information */}
           <Col lg={8}>
             {/* Step 1: Product Identification */}
             <Card className="mb-4">
-              <Card.Header className="d-flex justify-content-between align-items-center">
-                <span className="fw-bold">1. Product Identification</span>
-                {products.length > 0 && (
-                  <div className="d-flex align-items-center gap-2">
-                    <small className="text-muted">Or pick catalog product:</small>
-                    <Form.Select 
-                      size="sm" 
-                      style={{ width: 220 }}
-                      value={selectedProductId}
-                      onChange={handleProductSelect}
-                    >
-                      <option value="">Manual Entry</option>
-                      {products.map((p) => (
-                        <option key={p.product_id} value={p.product_id}>
-                          {p.name} ({p.brand})
-                        </option>
-                      ))}
-                    </Form.Select>
-                  </div>
-                )}
+              <Card.Header className="fw-bold">
+                1. Product Identification
               </Card.Header>
               <Card.Body className="p-4">
                 <Row className="g-3">
@@ -386,7 +617,14 @@ export default function SubmitClaim() {
                       value={formData.product_name}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.product_name ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.product_name && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.product_name.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={3}>
@@ -396,6 +634,7 @@ export default function SubmitClaim() {
                       value={formData.product_category}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.product_category ? 'border-warning' : ''}
                     >
                       <option value="">Select Category...</option>
                       <option value="Appliances">Appliances</option>
@@ -407,6 +646,12 @@ export default function SubmitClaim() {
                       <option value="Home Office & Furniture">Home Office & Furniture</option>
                       <option value="Power Tools & Hardware">Power Tools & Hardware</option>
                     </Form.Select>
+                    {fieldMismatches.product_category && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.product_category.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={3}>
@@ -416,7 +661,14 @@ export default function SubmitClaim() {
                       value={formData.brand}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.brand ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.brand && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.brand.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={4}>
@@ -426,7 +678,14 @@ export default function SubmitClaim() {
                       value={formData.model_number}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.model_number ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.model_number && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.model_number.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={4}>
@@ -436,8 +695,14 @@ export default function SubmitClaim() {
                       value={formData.serial_number_entered}
                       onChange={handleInputChange}
                       required
-                      className="font-mono"
+                      className={`font-mono ${fieldMismatches.serial_number_entered ? 'border-warning' : ''}`}
                     />
+                    {fieldMismatches.serial_number_entered && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong className="font-mono">{fieldMismatches.serial_number_entered.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={4}>
@@ -449,7 +714,14 @@ export default function SubmitClaim() {
                       value={formData.purchase_price}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.purchase_price ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.purchase_price && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.purchase_price.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={6}>
@@ -459,7 +731,14 @@ export default function SubmitClaim() {
                       value={formData.retailer}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.retailer ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.retailer && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.retailer.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={6}>
@@ -470,7 +749,14 @@ export default function SubmitClaim() {
                       value={formData.purchase_date}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.purchase_date ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.purchase_date && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.purchase_date.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
                 </Row>
               </Card.Body>
@@ -490,7 +776,14 @@ export default function SubmitClaim() {
                       value={formData.warranty_provider}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.warranty_provider ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.warranty_provider && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.warranty_provider.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={4}>
@@ -500,12 +793,19 @@ export default function SubmitClaim() {
                       value={formData.warranty_type}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.warranty_type ? 'border-warning' : ''}
                     >
                       <option value="">Select Coverage Type...</option>
                       <option value="Manufacturer Standard">Manufacturer Standard</option>
                       <option value="Extended Warranty">Extended Warranty</option>
                       <option value="Retailer Protection">Retailer Protection</option>
                     </Form.Select>
+                    {fieldMismatches.warranty_type && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.warranty_type.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={4}>
@@ -516,7 +816,14 @@ export default function SubmitClaim() {
                       value={formData.warranty_end}
                       onChange={handleInputChange}
                       required
+                      className={fieldMismatches.warranty_end ? 'border-warning' : ''}
                     />
+                    {fieldMismatches.warranty_end && (
+                      <div className="text-warning small mt-1 d-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                        <FaExclamationTriangle size={10} className="flex-shrink-0" />
+                        <span>Modified from registered: <strong>{fieldMismatches.warranty_end.original}</strong> (may require manual review)</span>
+                      </div>
+                    )}
                   </Col>
 
                   <Col md={4}>
@@ -974,26 +1281,37 @@ export default function SubmitClaim() {
                   className="mb-3 small"
                 />
 
-                {/* Submit Action */}
-                <Button 
-                  type="submit" 
-                  variant="primary" 
-                  size="lg" 
-                  className="w-100 py-3 fw-extrabold shadow-sm d-flex align-items-center justify-content-center gap-2"
-                  disabled={submitting}
-                >
-                  {submitting ? (
-                    <>
-                      <Spinner animation="border" size="sm" />
-                      <span>Synthesizing Card & Adjudicating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaBrain />
-                      <span>Trigger AI Adjudication</span>
-                    </>
-                  )}
-                </Button>
+                {/* Submit Action & Reset Button */}
+                <div className="d-flex gap-2">
+                  <Button 
+                    type="button" 
+                    variant="outline-secondary" 
+                    className="py-3 px-3 d-flex align-items-center gap-2 text-muted"
+                    onClick={() => setShowResetModal(true)}
+                    title="Reset all form data"
+                  >
+                    <FaUndo />
+                  </Button>
+                  <Button 
+                    type="submit" 
+                    variant="primary" 
+                    size="lg" 
+                    className="flex-grow-1 py-3 fw-extrabold shadow-sm d-flex align-items-center justify-content-center gap-2"
+                    disabled={submitting}
+                  >
+                    {submitting ? (
+                      <>
+                        <Spinner animation="border" size="sm" />
+                        <span>Synthesizing Card & Adjudicating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaBrain />
+                        <span>Trigger AI Adjudication</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                 <div className="text-center mt-3 text-muted" style={{ fontSize: '0.72rem' }}>
                   ⚡ Auto-renders 1200×1680 card, runs XGBoost tabular inference, MobileNetV2 vision inference, and deterministic rule arbitration.
@@ -1003,6 +1321,81 @@ export default function SubmitClaim() {
           </Col>
         </Row>
       </Form>
+
+      {/* Overwrite Confirmation Modal */}
+      <Modal 
+        show={showOverwriteModal} 
+        onHide={() => {
+          setShowOverwriteModal(false);
+          setPendingProduct(null);
+        }}
+        centered
+        contentClassName="bg-dark text-white border-warning border-opacity-50"
+      >
+        <Modal.Header closeButton closeVariant="white">
+          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-warning">
+            <FaExclamationTriangle /> Confirm Overwrite of Entered Data
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-4">
+          <p className="mb-2">
+            You have already entered product or warranty details in the claim form.
+          </p>
+          <p className="text-muted small mb-0">
+            Autofilling from <strong>{pendingProduct?.product_id} — {pendingProduct?.name}</strong> will overwrite your currently entered details with the registered product specifications. Are you sure you want to proceed?
+          </p>
+        </Modal.Body>
+        <Modal.Footer className="border-secondary border-opacity-25 justify-content-between">
+          <Button 
+            variant="secondary" 
+            onClick={() => {
+              setShowOverwriteModal(false);
+              setPendingProduct(null);
+            }}
+          >
+            Cancel & Keep Entered Data
+          </Button>
+          <Button 
+            variant="warning" 
+            className="fw-bold text-dark"
+            onClick={() => {
+              if (pendingProduct) applyAutofill(pendingProduct);
+            }}
+          >
+            Overwrite & Autofill
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Reset Form Confirmation Modal */}
+      <Modal 
+        show={showResetModal} 
+        onHide={() => setShowResetModal(false)}
+        centered
+        contentClassName="bg-dark text-white border-danger border-opacity-50"
+      >
+        <Modal.Header closeButton closeVariant="white">
+          <Modal.Title className="fw-bold d-flex align-items-center gap-2 text-danger">
+            <FaUndo /> Clear All Entered Data?
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="p-4">
+          <p className="mb-2">
+            Are you sure you want to reset the claim form?
+          </p>
+          <p className="text-muted small mb-0">
+            All entered product specifications, warranty dates, fault details, and uploaded evidence files will be cleared. This action cannot be undone.
+          </p>
+        </Modal.Body>
+        <Modal.Footer className="border-secondary border-opacity-25 justify-content-between">
+          <Button variant="secondary" onClick={() => setShowResetModal(false)}>
+            Keep Editing
+          </Button>
+          <Button variant="danger" className="fw-bold" onClick={handleConfirmReset}>
+            Yes, Reset Form
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Adjudication Result Modal */}
       {adjudicationResult && (

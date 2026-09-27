@@ -31,18 +31,19 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
+              {/* Protected routes — customer, employee, admin only (Reviewer blocked from submission & product registration) */}
+              <Route element={<ProtectedRoute allowedRoles={['customer', 'employee', 'admin']} />}>
+                <Route path="/claims/submit" element={<SubmitClaim />} />
+                <Route path="/claims/new" element={<SubmitClaim />} />
+                <Route path="/products" element={<Products />} />
+                <Route path="/warranties" element={<Products />} />
+              </Route>
+
               {/* Protected routes — any authenticated user */}
               <Route element={<ProtectedRoute />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/claims" element={<ClaimsList />} />
                 <Route path="/claims/:id" element={<ClaimDetail />} />
-              </Route>
-
-              {/* Protected routes — customer, employee, admin only (Reviewer blocked from submission & product registration) */}
-              <Route element={<ProtectedRoute allowedRoles={['customer', 'employee', 'admin']} />}>
-                <Route path="/claims/submit" element={<SubmitClaim />} />
-                <Route path="/products" element={<Products />} />
-                <Route path="/warranties" element={<Products />} />
               </Route>
 
               {/* Protected routes — reviewer + admin only */}

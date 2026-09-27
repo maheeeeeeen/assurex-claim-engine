@@ -4,7 +4,7 @@ AssureX Claim Engine — Warranties Router
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from src.database_setup import get_session
