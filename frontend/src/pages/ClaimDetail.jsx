@@ -36,7 +36,8 @@ import {
   FaFingerprint,
   FaCertificate,
   FaFilePdf,
-  FaDownload
+  FaDownload,
+  FaExchangeAlt
 } from 'react-icons/fa';
 
 export default function ClaimDetail() {
@@ -123,6 +124,7 @@ export default function ClaimDetail() {
   }
 
   const { claim, audit_logs, rule_evaluation, decision_reasons, tabular_probabilities, tm_probabilities } = dossier;
+  const crossVerification = dossier.cross_verification || (claim.cross_verification_json ? JSON.parse(claim.cross_verification_json) : null);
   const isReviewerOrAdmin = user?.role === 'reviewer' || user?.role === 'admin';
 
   // Format image & media URLs
@@ -693,22 +695,25 @@ export default function ClaimDetail() {
                   </div>
                 </div>
 
-                {/* 3. Serial Reconciliation */}
+                {/* 3. Serial & Model Reconciliation (Cross-Document Verification) */}
                 <div className="list-group-item bg-transparent border-subtle px-0 py-2 d-flex justify-content-between align-items-center">
                   <div>
-                    <div className="text-light small fw-semibold">Hardware Serial Reconciliation</div>
+                    <div className="text-light small fw-semibold">Cross-Document Serial & Model Verification</div>
                     <div className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>
-                      Entered: {claim.serial_number_entered} | Receipt: {claim.serial_number_on_receipt || 'None'}
+                      Entered SN: {claim.serial_number_entered || 'None'} | Model: {claim.model_number || 'None'}
+                      {claim.serial_number_on_receipt && ` • Receipt SN: ${claim.serial_number_on_receipt}`}
+                      {claim.serial_number_on_warranty_card && ` • Card SN: ${claim.serial_number_on_warranty_card}`}
+                      {claim.serial_number_on_barcode && ` • Barcode SN: ${claim.serial_number_on_barcode}`}
                     </div>
                   </div>
                   <div>
                     {!claim.serial_mismatch_flag ? (
                       <span className="text-success small fw-bold d-flex align-items-center gap-1">
-                        <FaCheckCircle /> Match
+                        <FaCheckCircle /> Verified Match
                       </span>
                     ) : (
                       <span className="text-danger small fw-bold d-flex align-items-center gap-1">
-                        <FaTimesCircle /> Mismatch
+                        <FaTimesCircle /> Mismatch Flagged
                       </span>
                     )}
                   </div>
@@ -798,6 +803,102 @@ export default function ClaimDetail() {
                   </div>
                 </div>
               </div>
+            </Card.Body>
+          </Card>
+
+          {/* Cross-Document Serial & Model Verification Matrix Card (Task 2) */}
+          <Card className="mb-4">
+            <Card.Header className="d-flex justify-content-between align-items-center">
+              <span className="fw-bold d-flex align-items-center gap-2">
+                <FaExchangeAlt className="text-info" /> Cross-Document Serial & Model Verification Matrix
+              </span>
+              {claim.serial_mismatch_flag || crossVerification?.has_mismatch ? (
+                <Badge bg="danger" className="d-inline-flex align-items-center gap-1">
+                  <FaExclamationTriangle size={10} /> Discrepancy Flagged
+                </Badge>
+              ) : (
+                <Badge bg="success" className="d-inline-flex align-items-center gap-1">
+                  <FaCheckCircle size={10} /> Verified Consistent
+                </Badge>
+              )}
+            </Card.Header>
+            <Card.Body className="p-3">
+              <div className="table-responsive rounded border border-secondary border-opacity-25 mb-3">
+                <table className="table table-dark table-sm table-hover mb-0" style={{ fontSize: '0.74rem' }}>
+                  <thead>
+                    <tr className="text-secondary bg-black bg-opacity-40">
+                      <th className="py-2 px-3">Evidence Source</th>
+                      <th className="py-2 px-3">Serial Number</th>
+                      <th className="py-2 px-3">Model Number</th>
+                      <th className="py-2 px-3 text-end">Reconciliation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td className="py-2 px-3 fw-semibold text-light">Entered Claim Form</td>
+                      <td className="py-2 px-3 font-mono text-info fw-bold">{claim.serial_number_entered || '—'}</td>
+                      <td className="py-2 px-3 font-mono text-warning fw-bold">{claim.model_number || '—'}</td>
+                      <td className="py-2 px-3 text-end"><Badge bg="primary">Entered Baseline</Badge></td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 fw-semibold text-light">Purchase Receipt (OCR)</td>
+                      <td className="py-2 px-3 font-mono">{claim.serial_number_on_receipt || <span className="text-muted italic">Not Scanned</span>}</td>
+                      <td className="py-2 px-3 font-mono">{claim.model_number_on_receipt || <span className="text-muted italic">Not Scanned</span>}</td>
+                      <td className="py-2 px-3 text-end">
+                        {!claim.serial_number_on_receipt && !claim.model_number_on_receipt ? (
+                          <Badge bg="dark" className="border border-secondary text-muted">Awaiting Scan</Badge>
+                        ) : crossVerification?.mismatches?.some(m => m.source_b === 'Receipt' || m.source_a === 'Receipt') ? (
+                          <Badge bg="danger">Mismatch</Badge>
+                        ) : (
+                          <Badge bg="success">Reconciled</Badge>
+                        )}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 fw-semibold text-light">Warranty Certificate / Card</td>
+                      <td className="py-2 px-3 font-mono">{claim.serial_number_on_warranty_card || <span className="text-muted italic">Not Scanned</span>}</td>
+                      <td className="py-2 px-3 font-mono">{claim.model_number_on_warranty_card || <span className="text-muted italic">Not Scanned</span>}</td>
+                      <td className="py-2 px-3 text-end">
+                        {!claim.serial_number_on_warranty_card && !claim.model_number_on_warranty_card ? (
+                          <Badge bg="dark" className="border border-secondary text-muted">Awaiting Scan</Badge>
+                        ) : crossVerification?.mismatches?.some(m => m.source_b === 'Warranty Card' || m.source_a === 'Warranty Card') ? (
+                          <Badge bg="danger">Mismatch</Badge>
+                        ) : (
+                          <Badge bg="success">Reconciled</Badge>
+                        )}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-2 px-3 fw-semibold text-light">Barcode / Product Photo</td>
+                      <td className="py-2 px-3 font-mono">{claim.serial_number_on_barcode || <span className="text-muted italic">Not Scanned</span>}</td>
+                      <td className="py-2 px-3 font-mono">{claim.model_number_on_barcode || <span className="text-muted italic">Not Scanned</span>}</td>
+                      <td className="py-2 px-3 text-end">
+                        {!claim.serial_number_on_barcode && !claim.model_number_on_barcode ? (
+                          <Badge bg="dark" className="border border-secondary text-muted">Awaiting Scan</Badge>
+                        ) : crossVerification?.mismatches?.some(m => m.source_b === 'Barcode / Product Photo' || m.source_a === 'Barcode / Product Photo') ? (
+                          <Badge bg="danger">Mismatch</Badge>
+                        ) : (
+                          <Badge bg="success">Reconciled</Badge>
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mismatch Alerts if any */}
+              {crossVerification?.mismatches && crossVerification.mismatches.length > 0 && (
+                <div className="p-2 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25 text-danger small">
+                  <div className="fw-bold d-flex align-items-center gap-2 mb-1">
+                    <FaExclamationTriangle /> Discrepancy flags detected during claim adjudication:
+                  </div>
+                  <ul className="mb-0 ps-3">
+                    {crossVerification.mismatches.map((m, idx) => (
+                      <li key={idx} style={{ fontSize: '0.72rem' }}>{m.message || m}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </Card.Body>
           </Card>
 

@@ -77,7 +77,12 @@ class Claim(SQLModel, table=True):
     model_number: str
     serial_number_entered: str = Field(index=True)
     serial_number_on_receipt: Optional[str] = None
+    model_number_on_receipt: Optional[str] = None
     serial_number_on_warranty_card: Optional[str] = None
+    model_number_on_warranty_card: Optional[str] = None
+    serial_number_on_barcode: Optional[str] = None
+    model_number_on_barcode: Optional[str] = None
+    cross_verification_json: Optional[str] = None
 
     # Purchase & Warranty terms
     purchase_date: str

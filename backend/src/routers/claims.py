@@ -26,7 +26,9 @@ from src.schemas.claims import (
     ClaimResponse, 
     ClaimStatsResponse,
     OCRProcessResponse,
-    MediaUploadResponse
+    MediaUploadResponse,
+    CrossVerificationRequest,
+    CrossVerificationResponse
 )
 from src.services.adjudication_engine import AdjudicationEngine
 from src.services.card_service import CardService
@@ -92,6 +94,8 @@ async def process_ocr(
         "purchase_date": ocr_result.get("purchase_date"),
         "serial_number": ocr_result.get("serial_number"),
         "detected_serials": ocr_result.get("detected_serials", []),
+        "model_number": ocr_result.get("model_number"),
+        "detected_models": ocr_result.get("detected_models", []),
         "purchase_amount": ocr_result.get("purchase_amount"),
         "ocr_confidence": ocr_result.get("ocr_confidence", 0.85),
         "ocr_engine": ocr_result.get("ocr_engine", "Tesseract_OCR"),
@@ -193,6 +197,24 @@ async def upload_media(
         f.write(contents)
 
     norm_path = file_path.replace("\\", "/")
+
+    # Run document extraction for receipts, warranty cards, barcodes, and product images
+    serial_number = None
+    model_number = None
+    detected_serials = []
+    detected_models = []
+    ocr_confidence = None
+    if media_type in ("warranty_card", "barcode_photo", "product_image", "receipt"):
+        try:
+            ocr_res = OCRService.extract_from_image(file_path, file_bytes=contents, doc_type=media_type)
+            serial_number = ocr_res.get("serial_number")
+            model_number = ocr_res.get("model_number")
+            detected_serials = ocr_res.get("detected_serials", [])
+            detected_models = ocr_res.get("detected_models", [])
+            ocr_confidence = ocr_res.get("ocr_confidence")
+        except Exception:
+            pass
+
     return {
         "media_type": media_type,
         "filename": file.filename,
@@ -200,8 +222,53 @@ async def upload_media(
         "file_url": f"/{norm_path}",
         "file_hash": file_hash,
         "file_size": len(contents),
-        "content_type": file.content_type or "application/octet-stream"
+        "content_type": file.content_type or "application/octet-stream",
+        "serial_number": serial_number,
+        "model_number": model_number,
+        "detected_serials": detected_serials,
+        "detected_models": detected_models,
+        "ocr_confidence": ocr_confidence,
     }
+
+
+@router.post("/cross-verify", response_model=CrossVerificationResponse)
+def cross_verify_documents(
+    payload: CrossVerificationRequest,
+    current_user: User = Depends(require_role(["customer", "employee", "admin"]))
+):
+    """
+    Real-time cross-document serial and model number verification.
+    Compares entered values against OCR-extracted data from receipts,
+    warranty cards, and barcode/product photos.
+    """
+    receipt_data = None
+    if payload.receipt_serial or payload.receipt_model:
+        receipt_data = {
+            "serial_number": payload.receipt_serial,
+            "model_number": payload.receipt_model,
+        }
+
+    warranty_card_data = None
+    if payload.warranty_card_serial or payload.warranty_card_model:
+        warranty_card_data = {
+            "serial_number": payload.warranty_card_serial,
+            "model_number": payload.warranty_card_model,
+        }
+
+    barcode_data = None
+    if payload.barcode_serial or payload.barcode_model:
+        barcode_data = {
+            "serial_number": payload.barcode_serial,
+            "model_number": payload.barcode_model,
+        }
+
+    return OCRService.cross_verify_all(
+        entered_serial=payload.entered_serial,
+        entered_model=payload.entered_model,
+        receipt_data=receipt_data,
+        warranty_card_data=warranty_card_data,
+        barcode_data=barcode_data,
+    )
 
 
 @router.post("/submit", response_model=ClaimResponse, status_code=status.HTTP_201_CREATED)
@@ -302,12 +369,27 @@ def submit_claim(
     if not has_product_img: missing_docs += 1
     if not has_fault_evidence: missing_docs += 1
 
-    # Cross-source serial reconciliation
-    receipt_sn = claim_in.serial_number_on_receipt or claim_in.serial_number_entered
-    serial_mismatch = False
-    if claim_in.serial_number_on_receipt and claim_in.serial_number_entered:
-        recon = OCRService.compare_serials(claim_in.serial_number_entered, claim_in.serial_number_on_receipt)
-        serial_mismatch = not recon["match"]
+    # Cross-document serial and model reconciliation across all sources
+    receipt_sn = claim_in.serial_number_on_receipt or None
+    receipt_mod = claim_in.model_number_on_receipt or None
+    card_sn = claim_in.serial_number_on_warranty_card or None
+    card_mod = claim_in.model_number_on_warranty_card or None
+    barcode_sn = claim_in.serial_number_on_barcode or None
+    barcode_mod = claim_in.model_number_on_barcode or None
+
+    receipt_doc = {"serial_number": receipt_sn, "model_number": receipt_mod} if (receipt_sn or receipt_mod) else None
+    card_doc = {"serial_number": card_sn, "model_number": card_mod} if (card_sn or card_mod) else None
+    barcode_doc = {"serial_number": barcode_sn, "model_number": barcode_mod} if (barcode_sn or barcode_mod) else None
+
+    cross_recon = OCRService.cross_verify_all(
+        entered_serial=claim_in.serial_number_entered,
+        entered_model=claim_in.model_number,
+        receipt_data=receipt_doc,
+        warranty_card_data=card_doc,
+        barcode_data=barcode_doc,
+    )
+    has_serial_mismatch = cross_recon["has_serial_mismatch"]
+    cross_verification_str = json.dumps(cross_recon)
 
     # Check for duplicate document hash in existing claims
     is_duplicate_claim = False
@@ -327,7 +409,12 @@ def submit_claim(
         "model_number": claim_in.model_number,
         "serial_number_entered": claim_in.serial_number_entered,
         "serial_number_on_receipt": receipt_sn,
-        "serial_number_on_warranty_card": claim_in.serial_number_entered,
+        "model_number_on_receipt": receipt_mod,
+        "serial_number_on_warranty_card": card_sn,
+        "model_number_on_warranty_card": card_mod,
+        "serial_number_on_barcode": barcode_sn,
+        "model_number_on_barcode": barcode_mod,
+        "cross_verification_json": cross_verification_str,
         "purchase_date": claim_in.purchase_date,
         "purchase_price": claim_in.purchase_price,
         "retailer": claim_in.retailer,
@@ -350,7 +437,7 @@ def submit_claim(
         "fault_evidence_uploaded": has_fault_evidence,
         "repair_report_uploaded": claim_in.repair_report_uploaded,
         "missing_doc_count": missing_docs,
-        "serial_mismatch_flag": serial_mismatch,
+        "serial_mismatch_flag": has_serial_mismatch,
         "date_contradiction_flag": False,
         "excluded_damage": False,
         "duplicate_claim_flag": is_duplicate_claim,
@@ -372,6 +459,12 @@ def submit_claim(
         model_number=claim_in.model_number,
         serial_number_entered=claim_in.serial_number_entered,
         serial_number_on_receipt=receipt_sn,
+        model_number_on_receipt=receipt_mod,
+        serial_number_on_warranty_card=card_sn,
+        model_number_on_warranty_card=card_mod,
+        serial_number_on_barcode=barcode_sn,
+        model_number_on_barcode=barcode_mod,
+        cross_verification_json=cross_verification_str,
         purchase_date=claim_in.purchase_date,
         purchase_price=claim_in.purchase_price,
         retailer=claim_in.retailer,
@@ -407,7 +500,7 @@ def submit_claim(
         repair_report_uploaded=claim_in.repair_report_uploaded,
         missing_doc_count=missing_docs,
         card_image_path=card_image_rel_path,
-        serial_mismatch_flag=serial_mismatch,
+        serial_mismatch_flag=has_serial_mismatch,
         duplicate_claim_flag=is_duplicate_claim,
         ocr_extracted_json=claim_in.ocr_extracted_json,
         rule_evaluation_json=json.dumps(eval_result["rule_evaluation"]),
@@ -460,12 +553,12 @@ def submit_claim(
     session.add(log3)
     session.add(log_warranty)
 
-    if serial_mismatch:
+    if has_serial_mismatch:
         log_mismatch = ClaimAuditLog(
             claim_id=claim_id,
             actor="OCR_Reconciliation",
             action="SERIAL_MISMATCH_DETECTED",
-            details=f"Entered serial '{claim_in.serial_number_entered}' does not match document serial '{receipt_sn}'.",
+            details=f"Entered serial '{claim_in.serial_number_entered}' conflicts with uploaded document scan.",
         )
         session.add(log_mismatch)
 
@@ -613,6 +706,7 @@ def get_claim_detail(
         "decision_reasons": json.loads(claim.decision_reasons_json) if claim.decision_reasons_json else [],
         "tabular_probabilities": json.loads(claim.tabular_probabilities_json) if claim.tabular_probabilities_json else {},
         "tm_probabilities": json.loads(claim.tm_probabilities_json) if claim.tm_probabilities_json else {},
+        "cross_verification": json.loads(claim.cross_verification_json) if claim.cross_verification_json else None,
     }
 
 

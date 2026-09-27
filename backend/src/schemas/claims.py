@@ -35,9 +35,12 @@ class ClaimSubmitRequest(BaseModel):
     receipt_path: Optional[str] = None
     receipt_hash: Optional[str] = None
     serial_number_on_receipt: Optional[str] = None
+    model_number_on_receipt: Optional[str] = None
     warranty_card_uploaded: bool = False
     warranty_card_path: Optional[str] = None
     warranty_card_hash: Optional[str] = None
+    serial_number_on_warranty_card: Optional[str] = None
+    model_number_on_warranty_card: Optional[str] = None
     product_image_uploaded: bool = False
     product_image_path: Optional[str] = None
     product_image_hash: Optional[str] = None
@@ -50,8 +53,11 @@ class ClaimSubmitRequest(BaseModel):
     barcode_image_uploaded: bool = False
     barcode_image_path: Optional[str] = None
     barcode_image_hash: Optional[str] = None
+    serial_number_on_barcode: Optional[str] = None
+    model_number_on_barcode: Optional[str] = None
     repair_report_uploaded: bool = False
     ocr_extracted_json: Optional[str] = None
+    cross_verification_json: Optional[str] = None
 
 
 class MediaUploadResponse(BaseModel):
@@ -62,6 +68,11 @@ class MediaUploadResponse(BaseModel):
     file_hash: str
     file_size: int
     content_type: str
+    serial_number: Optional[str] = None
+    model_number: Optional[str] = None
+    detected_serials: List[str] = []
+    detected_models: List[str] = []
+    ocr_confidence: Optional[float] = None
 
 
 class OCRProcessResponse(BaseModel):
@@ -70,6 +81,8 @@ class OCRProcessResponse(BaseModel):
     purchase_date: Optional[str] = None
     serial_number: Optional[str] = None
     detected_serials: List[str] = []
+    model_number: Optional[str] = None
+    detected_models: List[str] = []
     purchase_amount: Optional[float] = None
     ocr_confidence: float = 0.85
     ocr_engine: str = "Tesseract_OCR"
@@ -78,6 +91,29 @@ class OCRProcessResponse(BaseModel):
     is_duplicate_file: bool = False
     duplicate_claim_id: Optional[str] = None
     raw_text: Optional[str] = None
+
+
+class CrossVerificationRequest(BaseModel):
+    entered_serial: str
+    entered_model: str
+    receipt_serial: Optional[str] = None
+    receipt_model: Optional[str] = None
+    warranty_card_serial: Optional[str] = None
+    warranty_card_model: Optional[str] = None
+    barcode_serial: Optional[str] = None
+    barcode_model: Optional[str] = None
+
+
+class CrossVerificationResponse(BaseModel):
+    has_mismatch: bool
+    has_serial_mismatch: bool
+    has_model_mismatch: bool
+    total_mismatches: int
+    total_matches: int
+    mismatches: List[Dict[str, Any]] = []
+    matches: List[Dict[str, Any]] = []
+    sources: Dict[str, Any] = {}
+    status: str
 
 
 class ClaimAdjudicationAction(BaseModel):
@@ -129,8 +165,11 @@ class ClaimResponse(BaseModel):
     receipt_path: Optional[str] = None
     receipt_hash: Optional[str] = None
     serial_number_on_receipt: Optional[str] = None
+    model_number_on_receipt: Optional[str] = None
     warranty_card_path: Optional[str] = None
     warranty_card_hash: Optional[str] = None
+    serial_number_on_warranty_card: Optional[str] = None
+    model_number_on_warranty_card: Optional[str] = None
     product_image_path: Optional[str] = None
     product_image_hash: Optional[str] = None
     fault_evidence_path: Optional[str] = None
@@ -139,6 +178,9 @@ class ClaimResponse(BaseModel):
     fault_video_hash: Optional[str] = None
     barcode_image_path: Optional[str] = None
     barcode_image_hash: Optional[str] = None
+    serial_number_on_barcode: Optional[str] = None
+    model_number_on_barcode: Optional[str] = None
+    cross_verification_json: Optional[str] = None
 
     # Dual ML Predictions
     tabular_prediction: Optional[str] = None

@@ -29,6 +29,9 @@ export const claimsAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
 
+  // Real-time cross-document serial & model verification
+  crossVerify: (data) => api.post('/api/claims/cross-verify', data),
+
   // Adjuster decision on a claim
   adjudicateClaim: (claimId, payload) =>
     api.post(`/api/claims/${claimId}/adjudicate`, payload),

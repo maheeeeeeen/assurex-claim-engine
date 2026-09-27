@@ -26,6 +26,8 @@ import json
 from typing import Dict, Any, List, Tuple
 from datetime import datetime, date
 
+from .ocr_service import OCRService
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 POLICIES_DIR = os.path.join(BASE_DIR, "policies")
 
@@ -137,20 +139,43 @@ class RuleEngine:
             hard_failures.append(f"Warranty Expired: Claim submitted {abs(int(rem_days))} days past warranty expiration (outside {grace_days}-day grace period).")
 
         # -------------------------------------------------------------
-        # Rule 3: Serial Number Reconciliation
+        # Rule 3: Serial & Model Number Reconciliation (Cross-Document Verification)
         # -------------------------------------------------------------
-        serial_entered = str(claim_data.get("serial_number_entered", "")).strip().upper()
-        serial_receipt = str(claim_data.get("serial_number_on_receipt", "") or "").strip().upper()
-        serial_card = str(claim_data.get("serial_number_on_warranty_card", "") or "").strip().upper()
+        serial_entered = str(claim_data.get("serial_number_entered", "") or "").strip().upper()
+        model_entered = str(claim_data.get("model_number", "") or claim_data.get("model_number_entered", "") or "").strip().upper()
 
-        if claim_data.get("serial_mismatch_flag", False):
+        receipt_sn = str(claim_data.get("serial_number_on_receipt", "") or "").strip().upper()
+        receipt_mod = str(claim_data.get("model_number_on_receipt", "") or "").strip().upper()
+
+        card_sn = str(claim_data.get("serial_number_on_warranty_card", "") or "").strip().upper()
+        card_mod = str(claim_data.get("model_number_on_warranty_card", "") or "").strip().upper()
+
+        barcode_sn = str(claim_data.get("serial_number_on_barcode", "") or "").strip().upper()
+        barcode_mod = str(claim_data.get("model_number_on_barcode", "") or "").strip().upper()
+
+        receipt_data = {"serial_number": receipt_sn, "model_number": receipt_mod} if (receipt_sn or receipt_mod) else None
+        warranty_card_data = {"serial_number": card_sn, "model_number": card_mod} if (card_sn or card_mod) else None
+        barcode_data = {"serial_number": barcode_sn, "model_number": barcode_mod} if (barcode_sn or barcode_mod) else None
+
+        cross_res = OCRService.cross_verify_all(
+            entered_serial=serial_entered,
+            entered_model=model_entered,
+            receipt_data=receipt_data,
+            warranty_card_data=warranty_card_data,
+            barcode_data=barcode_data,
+        )
+
+        cross_mismatches = cross_res.get("mismatches", [])
+        if cross_mismatches:
+            for mis in cross_mismatches:
+                review_flags.append(mis["message"])
+        elif claim_data.get("serial_mismatch_flag", False):
             review_flags.append(f"Serial mismatch flag: Entered serial ({serial_entered}) conflicts with verified proof of purchase.")
-        elif serial_receipt and serial_entered != serial_receipt:
-            review_flags.append(f"Serial mismatch: Entered serial ({serial_entered}) does not match receipt serial ({serial_receipt}).")
-        elif serial_card and serial_entered != serial_card:
-            review_flags.append(f"Serial mismatch: Entered serial ({serial_entered}) does not match warranty card serial ({serial_card}).")
         else:
-            passed_checks.append(f"Serial number validated across documents ({serial_entered}).")
+            if cross_res.get("total_matches", 0) > 0:
+                passed_checks.append(f"Cross-document verification passed: Serial and model numbers consistent across verified documents ({serial_entered}).")
+            else:
+                passed_checks.append(f"Serial number validated across documents ({serial_entered}).")
 
         # -------------------------------------------------------------
         # Rule 4: Excluded Damage Types (Category Policy Terms)

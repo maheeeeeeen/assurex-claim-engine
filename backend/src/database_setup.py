@@ -52,6 +52,11 @@ def _migrate_sqlite_columns():
                 ("fault_video_hash", "TEXT"),
                 ("barcode_image_path", "TEXT"),
                 ("barcode_image_hash", "TEXT"),
+                ("model_number_on_receipt", "TEXT"),
+                ("model_number_on_warranty_card", "TEXT"),
+                ("serial_number_on_barcode", "TEXT"),
+                ("model_number_on_barcode", "TEXT"),
+                ("cross_verification_json", "TEXT"),
             ]
             for col_name, col_type in new_cols:
                 if col_name not in existing_cols:
@@ -80,3 +85,8 @@ def get_session():
     """
     with Session(engine) as session:
         yield session
+
+
+# Run migration automatically on module load so SQLite schema stays synchronized
+_migrate_sqlite_columns()
+

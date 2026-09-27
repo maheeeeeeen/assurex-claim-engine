@@ -72,14 +72,19 @@ const INITIAL_FORM_STATE = {
   receipt_path: null,
   receipt_hash: null,
   serial_number_on_receipt: null,
+  model_number_on_receipt: null,
   warranty_card_path: null,
   warranty_card_hash: null,
+  serial_number_on_warranty_card: null,
+  model_number_on_warranty_card: null,
   fault_evidence_path: null,
   fault_evidence_hash: null,
   fault_video_path: null,
   fault_video_hash: null,
   barcode_image_path: null,
   barcode_image_hash: null,
+  serial_number_on_barcode: null,
+  model_number_on_barcode: null,
   product_image_path: null,
   product_image_hash: null,
 };
@@ -186,7 +191,7 @@ export default function SubmitClaim() {
       data.append('media_type', mediaType);
 
       const res = await claimsAPI.uploadMedia(data);
-      const { file_path, file_hash, file_size, filename } = res.data;
+      const { file_path, file_hash, file_size, filename, serial_number, model_number } = res.data;
       const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
       const previewUrl = isPdf ? null : URL.createObjectURL(file);
 
@@ -225,6 +230,8 @@ export default function SubmitClaim() {
           product_image_uploaded: true,
           product_image_path: file_path,
           product_image_hash: file_hash,
+          serial_number_on_barcode: serial_number || prev.serial_number_entered || null,
+          model_number_on_barcode: model_number || prev.model_number || null,
         }));
       } else if (isWarranty) {
         setFormData((prev) => ({
@@ -232,6 +239,8 @@ export default function SubmitClaim() {
           warranty_card_path: file_path,
           warranty_card_hash: file_hash,
           warranty_card_uploaded: true,
+          serial_number_on_warranty_card: serial_number || prev.serial_number_entered || null,
+          model_number_on_warranty_card: model_number || prev.model_number || null,
         }));
       }
     } catch (err) {
@@ -253,11 +262,28 @@ export default function SubmitClaim() {
     } else if (mediaType === 'barcode_photo') {
       if (barcodePhoto.preview) URL.revokeObjectURL(barcodePhoto.preview);
       setBarcodePhoto({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, loading: false, error: '' });
-      setFormData((prev) => ({ ...prev, barcode_image_path: null, barcode_image_hash: null, barcode_image_uploaded: false, product_image_uploaded: false, product_image_path: null, product_image_hash: null }));
+      setFormData((prev) => ({ 
+        ...prev, 
+        barcode_image_path: null, 
+        barcode_image_hash: null, 
+        barcode_image_uploaded: false, 
+        product_image_uploaded: false, 
+        product_image_path: null, 
+        product_image_hash: null,
+        serial_number_on_barcode: null,
+        model_number_on_barcode: null,
+      }));
     } else if (mediaType === 'warranty_card') {
       if (warrantyCard.preview) URL.revokeObjectURL(warrantyCard.preview);
       setWarrantyCard({ file: null, preview: null, filename: '', path: '', hash: '', size: 0, isPdf: false, loading: false, error: '' });
-      setFormData((prev) => ({ ...prev, warranty_card_path: null, warranty_card_hash: null, warranty_card_uploaded: false }));
+      setFormData((prev) => ({ 
+        ...prev, 
+        warranty_card_path: null, 
+        warranty_card_hash: null, 
+        warranty_card_uploaded: false,
+        serial_number_on_warranty_card: null,
+        model_number_on_warranty_card: null,
+      }));
     }
   };
 
@@ -565,6 +591,7 @@ export default function SubmitClaim() {
         receipt_path: res.data.file_path,
         receipt_hash: res.data.file_hash,
         serial_number_on_receipt: res.data.serial_number || prev.serial_number_entered,
+        model_number_on_receipt: res.data.model_number || prev.model_number,
       }));
     } catch (err) {
       console.error('OCR Processing error:', err);
@@ -584,6 +611,8 @@ export default function SubmitClaim() {
       purchase_price: ocrResult.purchase_amount !== null && ocrResult.purchase_amount !== undefined ? ocrResult.purchase_amount : prev.purchase_price,
       serial_number_entered: ocrResult.serial_number || prev.serial_number_entered,
       serial_number_on_receipt: ocrResult.serial_number || prev.serial_number_on_receipt,
+      model_number: ocrResult.model_number || prev.model_number,
+      model_number_on_receipt: ocrResult.model_number || prev.model_number_on_receipt,
     }));
   };
 
@@ -599,6 +628,105 @@ export default function SubmitClaim() {
       return { status: 'mismatch', text: 'Serial Mismatch', message: `Entered serial (${formData.serial_number_entered}) does not match document (${ocrResult.serial_number}).` };
     }
   };
+
+  // Task 2: Real-time Multi-Document Serial & Model Verification
+  const crossDocVerification = (() => {
+    const enteredSerial = (formData.serial_number_entered || '').trim();
+    const enteredModel = (formData.model_number || '').trim();
+
+    const sources = [
+      {
+        id: 'entered',
+        name: 'Entered Claim Form',
+        serial: enteredSerial || null,
+        model: enteredModel || null,
+        present: Boolean(enteredSerial || enteredModel),
+        badge: 'Primary Form',
+      },
+      {
+        id: 'receipt',
+        name: 'Purchase Receipt (OCR)',
+        serial: formData.serial_number_on_receipt || null,
+        model: formData.model_number_on_receipt || null,
+        present: Boolean(formData.receipt_uploaded && (formData.serial_number_on_receipt || formData.model_number_on_receipt)),
+        badge: 'Slot: Receipt',
+      },
+      {
+        id: 'warranty_card',
+        name: 'Warranty Card / Cert',
+        serial: formData.serial_number_on_warranty_card || null,
+        model: formData.model_number_on_warranty_card || null,
+        present: Boolean(formData.warranty_card_uploaded && (formData.serial_number_on_warranty_card || formData.model_number_on_warranty_card)),
+        badge: 'Slot 4: Warranty Card',
+      },
+      {
+        id: 'barcode',
+        name: 'Barcode / Product Photo',
+        serial: formData.serial_number_on_barcode || null,
+        model: formData.model_number_on_barcode || null,
+        present: Boolean(formData.barcode_image_uploaded && (formData.serial_number_on_barcode || formData.model_number_on_barcode)),
+        badge: 'Slot 3: Barcode',
+      },
+    ];
+
+    const cleanStr = (s) => (s || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+    const mismatches = [];
+    const matches = [];
+
+    const activeDocs = sources.filter((s) => s.id !== 'entered' && s.present);
+
+    activeDocs.forEach((doc) => {
+      if (enteredSerial && doc.serial) {
+        const cEnt = cleanStr(enteredSerial);
+        const cDoc = cleanStr(doc.serial);
+        if (cEnt === cDoc || cEnt.includes(cDoc) || cDoc.includes(cEnt)) {
+          matches.push(`Serial matched with ${doc.name} (${doc.serial})`);
+        } else {
+          mismatches.push(`Serial mismatch: Entered serial '${enteredSerial}' conflicts with ${doc.name} '${doc.serial}'.`);
+        }
+      }
+      if (enteredModel && doc.model) {
+        const cEnt = cleanStr(enteredModel);
+        const cDoc = cleanStr(doc.model);
+        if (cEnt === cDoc || cEnt.includes(cDoc) || cDoc.includes(cEnt)) {
+          matches.push(`Model matched with ${doc.name} (${doc.model})`);
+        } else {
+          mismatches.push(`Model mismatch: Entered model '${enteredModel}' conflicts with ${doc.name} '${doc.model}'.`);
+        }
+      }
+    });
+
+    for (let i = 0; i < activeDocs.length; i++) {
+      for (let j = i + 1; j < activeDocs.length; j++) {
+        const docA = activeDocs[i];
+        const docB = activeDocs[j];
+        if (docA.serial && docB.serial) {
+          const sA = cleanStr(docA.serial);
+          const sB = cleanStr(docB.serial);
+          if (sA !== sB && !sA.includes(sB) && !sB.includes(sA)) {
+            mismatches.push(`Cross-document serial mismatch: ${docA.name} '${docA.serial}' vs ${docB.name} '${docB.serial}'.`);
+          }
+        }
+        if (docA.model && docB.model) {
+          const mA = cleanStr(docA.model);
+          const mB = cleanStr(docB.model);
+          if (mA !== mB && !mA.includes(mB) && !mB.includes(mA)) {
+            mismatches.push(`Cross-document model mismatch: ${docA.name} '${docA.model}' vs ${docB.name} '${docB.model}'.`);
+          }
+        }
+      }
+    }
+
+    return {
+      sources,
+      activeDocs,
+      mismatches,
+      matches,
+      hasMismatch: mismatches.length > 0,
+      hasActiveDocs: activeDocs.length > 0,
+    };
+  })();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1542,6 +1670,114 @@ export default function SubmitClaim() {
                             <FaTrash size={12} />
                           </Button>
                         </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Task 2: Cross-Document Serial & Model Verification Panel */}
+                  <div className="mt-3 p-3 rounded bg-surface border border-secondary border-opacity-25">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <div className="small fw-bold text-white d-flex align-items-center gap-2">
+                        <FaExchangeAlt className="text-info" /> Cross-Document Serial & Model Verification
+                      </div>
+                      {crossDocVerification.hasActiveDocs ? (
+                        crossDocVerification.hasMismatch ? (
+                          <Badge bg="danger" className="d-flex align-items-center gap-1">
+                            <FaExclamationTriangle size={10} /> Discrepancy Flagged
+                          </Badge>
+                        ) : (
+                          <Badge bg="success" className="d-flex align-items-center gap-1">
+                            <FaCheckCircle size={10} /> Scanned Documents Consistent
+                          </Badge>
+                        )
+                      ) : (
+                        <Badge bg="secondary" className="border border-secondary text-muted" style={{ fontSize: '0.68rem' }}>
+                          Awaiting Document Scans
+                        </Badge>
+                      )}
+                    </div>
+
+                    <p className="text-muted small mb-2" style={{ fontSize: '0.74rem' }}>
+                      The AssureX Rule Engine cross-references serial and model numbers across your entered form, receipt OCR, warranty card, and barcode scans to detect discrepancies.
+                    </p>
+
+                    {/* Comparison Table / Matrix */}
+                    <div className="table-responsive rounded border border-secondary border-opacity-25 mb-2">
+                      <table className="table table-dark table-sm table-hover mb-0" style={{ fontSize: '0.74rem' }}>
+                        <thead>
+                          <tr className="text-secondary bg-black bg-opacity-40">
+                            <th className="py-2 px-3">Document Source</th>
+                            <th className="py-2 px-3">Detected Serial</th>
+                            <th className="py-2 px-3">Detected Model</th>
+                            <th className="py-2 px-3 text-end">Reconciliation</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {crossDocVerification.sources.map((src) => {
+                            const isEntered = src.id === 'entered';
+                            return (
+                              <tr key={src.id} className={src.present ? '' : 'opacity-50'}>
+                                <td className="py-2 px-3">
+                                  <span className="fw-semibold text-light">{src.name}</span>
+                                  <span className="badge bg-secondary ms-2 opacity-75" style={{ fontSize: '0.62rem' }}>{src.badge}</span>
+                                </td>
+                                <td className="py-2 px-3 font-mono">
+                                  {src.serial ? (
+                                    <span className="text-info fw-bold">{src.serial}</span>
+                                  ) : (
+                                    <span className="text-muted italic">{src.present ? 'Not extracted' : 'No document uploaded'}</span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 font-mono">
+                                  {src.model ? (
+                                    <span className="text-warning fw-bold">{src.model}</span>
+                                  ) : (
+                                    <span className="text-muted italic">{src.present ? 'Not extracted' : 'No document uploaded'}</span>
+                                  )}
+                                </td>
+                                <td className="py-2 px-3 text-end">
+                                  {isEntered ? (
+                                    <Badge bg="primary">Entered Baseline</Badge>
+                                  ) : !src.present ? (
+                                    <Badge bg="dark" className="border border-secondary text-muted">Awaiting Scan</Badge>
+                                  ) : crossDocVerification.mismatches.some(m => m.includes(src.name)) ? (
+                                    <Badge bg="danger" className="d-inline-flex align-items-center gap-1">
+                                      <FaTimesCircle size={9} /> Discrepancy
+                                    </Badge>
+                                  ) : (
+                                    <Badge bg="success" className="d-inline-flex align-items-center gap-1">
+                                      <FaCheckCircle size={9} /> Reconciled
+                                    </Badge>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Status Warnings */}
+                    {crossDocVerification.hasMismatch && (
+                      <div className="p-2 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25 small text-danger mt-2">
+                        <div className="fw-bold d-flex align-items-center gap-2 mb-1">
+                          <FaExclamationTriangle /> Discrepancies detected between entered details and uploaded evidence:
+                        </div>
+                        <ul className="mb-0 ps-3">
+                          {crossDocVerification.mismatches.map((m, idx) => (
+                            <li key={idx} style={{ fontSize: '0.72rem' }}>{m}</li>
+                          ))}
+                        </ul>
+                        <div className="mt-1 text-secondary" style={{ fontSize: '0.70rem' }}>
+                          Note: You can still submit this claim; the AssureX Rule Engine will flag the discrepancy and route it for Human Adjuster Review.
+                        </div>
+                      </div>
+                    )}
+
+                    {!crossDocVerification.hasMismatch && crossDocVerification.matches.length > 0 && (
+                      <div className="p-2 rounded bg-success bg-opacity-10 border border-success border-opacity-25 small text-success d-flex align-items-center gap-2 mt-2">
+                        <FaCheckCircle />
+                        <span>All detected serial and model numbers match across uploaded evidence.</span>
                       </div>
                     )}
                   </div>
