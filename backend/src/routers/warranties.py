@@ -2,9 +2,9 @@
 AssureX Claim Engine — Warranties Router
 """
 
-from typing import Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from src.database_setup import get_session
@@ -14,10 +14,97 @@ router = APIRouter()
 
 
 @router.get("/")
-def list_warranties(session: Session = Depends(get_session)):
-    """List registered warranties."""
-    warranties = session.exec(select(Warranty).limit(100)).all()
-    return warranties
+def list_warranties(
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 150,
+    session: Session = Depends(get_session)
+):
+    """
+    List registered warranties enriched with associated product details,
+    dynamically calculated remaining days, and expiry threshold alerts.
+    """
+    warranties = session.exec(select(Warranty).order_by(Warranty.id.desc()).limit(limit)).all()
+    today = datetime.utcnow().date()
+
+    # Preload product map for O(1) enrichment
+    product_ids = [w.product_id for w in warranties if w.product_id]
+    products = session.exec(select(Product).where(Product.product_id.in_(product_ids))).all() if product_ids else []
+    product_map = {p.product_id: p for p in products}
+
+    results = []
+    for w in warranties:
+        prod = product_map.get(w.product_id)
+
+        try:
+            end_date = datetime.strptime(w.end_date[:10], "%Y-%m-%d").date()
+            remaining_days = (end_date - today).days
+
+            if remaining_days < 0:
+                calc_status = "Expired"
+            elif 0 <= remaining_days <= 30:
+                calc_status = "Expiring Soon (< 30 days)"
+            elif 30 < remaining_days <= 60:
+                calc_status = "Nearing Expiry (< 60 days)"
+            else:
+                calc_status = "Active"
+        except Exception:
+            remaining_days = 0
+            calc_status = w.status
+
+        # Apply Category Filter
+        if category and category != "all" and prod and prod.category != category:
+            continue
+
+        # Apply Status Filter
+        if status and status != "all":
+            if status == "active" and remaining_days < 0:
+                continue
+            elif status == "expiring_soon" and not (0 <= remaining_days <= 30):
+                continue
+            elif status == "nearing_expiry" and not (0 <= remaining_days <= 60):
+                continue
+            elif status == "expired" and remaining_days >= 0:
+                continue
+
+        # Apply Search Filter
+        if search:
+            s = search.lower()
+            prod_name = prod.name.lower() if prod else ""
+            prod_sn = prod.serial_number.lower() if prod else ""
+            prod_brand = prod.brand.lower() if prod else ""
+            if s not in w.warranty_id.lower() and s not in prod_name and s not in prod_sn and s not in prod_brand:
+                continue
+
+        results.append({
+            "id": w.id,
+            "warranty_id": w.warranty_id,
+            "product_id": w.product_id,
+            "user_id": w.user_id,
+            "provider": w.provider,
+            "warranty_type": w.warranty_type,
+            "start_date": w.start_date,
+            "end_date": w.end_date,
+            "terms": w.terms,
+            "status": w.status,
+            "remaining_days": remaining_days,
+            "calculated_status": calc_status,
+            "is_expiring_soon": 0 <= remaining_days <= 30,
+            "is_nearing_expiry": 0 <= remaining_days <= 60,
+            "product": {
+                "name": prod.name if prod else "Unknown Product",
+                "category": prod.category if prod else "General",
+                "brand": prod.brand if prod else "General",
+                "model_number": prod.model_number if prod else "",
+                "serial_number": prod.serial_number if prod else "",
+                "retailer": prod.retailer if prod else "",
+                "purchase_price": prod.purchase_price if prod else 0.0,
+                "purchase_date": prod.purchase_date if prod else "",
+            } if prod else None,
+        })
+
+    return results
 
 
 @router.get("/check/{product_id}")

@@ -5,13 +5,13 @@
 import api from './client';
 
 export const productsAPI = {
-  getProducts: () => api.get('/api/products/'),
+  getProducts: (params = {}) => api.get('/api/products/', { params }),
   getProduct: (id) => api.get(`/api/products/${id}`),
   createProduct: (data) => api.post('/api/products/', data),
 };
 
 export const warrantiesAPI = {
-  getWarranties: () => api.get('/api/warranties/'),
+  getWarranties: (params = {}) => api.get('/api/warranties/', { params }),
   checkWarranty: (productId) => api.get(`/api/warranties/check/${productId}`),
 };
 
