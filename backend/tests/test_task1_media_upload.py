@@ -13,8 +13,11 @@ import os
 import hashlib
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
+from sqlmodel import Session, select
 
 from src.main import app
+from src.database_setup import engine
+from src.models import Product, Warranty
 from src.services.ocr_service import OCRService
 from src.auth.service import create_access_token
 
@@ -101,11 +104,43 @@ def test_media_upload_and_claim_flow():
     assert len(static_res.content) == len(photo_bytes)
     print(f"[Pass] Static file serving verified for {rel_url} ({len(static_res.content)} bytes).")
 
-    # 6. Test Submit Claim with Attached Evidence
+    # Ensure a registered product with active warranty exists for claim submission
+    with Session(engine) as s:
+        p = s.exec(select(Product).where(Product.product_id == "PRD-TASK1-TEST")).first()
+        if not p:
+            p = Product(
+                product_id="PRD-TASK1-TEST",
+                name="UltraView OLED 65",
+                category="Electronics",
+                brand="LG",
+                model_number="OLED65C3",
+                serial_number="SN-LG-990022",
+                purchase_price=1899.99,
+                retailer="Best Buy",
+                purchase_date="2025-02-10",
+                user_id=None,
+            )
+            s.add(p)
+            s.commit()
+        w = s.exec(select(Warranty).where(Warranty.product_id == "PRD-TASK1-TEST")).first()
+        if not w:
+            w = Warranty(
+                warranty_id="WAR-TASK1-TEST",
+                product_id="PRD-TASK1-TEST",
+                provider="LG Care Plus",
+                warranty_type="Extended Warranty",
+                start_date="2025-02-10",
+                end_date="2028-02-10",
+                status="Active",
+            )
+            s.add(w)
+            s.commit()
+
     token = create_access_token({"sub": "admin", "role": "admin"})
     headers = {"Authorization": f"Bearer {token}"}
 
     claim_payload = {
+        "product_id": "PRD-TASK1-TEST",
         "product_name": "UltraView OLED 65",
         "product_category": "Electronics",
         "brand": "LG",

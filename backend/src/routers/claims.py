@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, File, Uplo
 from sqlmodel import Session, select, func
 
 from src.database_setup import get_session
-from src.models import Claim, ClaimAuditLog, User
+from src.models import Claim, ClaimAuditLog, User, Product, Warranty
 from src.auth.service import get_current_user, require_role
 from src.schemas.claims import (
     ClaimSubmitRequest, 
@@ -215,14 +215,68 @@ def submit_claim(
     and deterministic business rules, and instantly adjudicates the claim.
     """
     engine = get_adjudication_engine()
+    today = datetime.utcnow().date()
+
+    # 0. Enforce Product Registration, Ownership & Active Warranty Validation (Task 3)
+    if not claim_in.product_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Claim must be filed against a valid registered product. Please select and link a registered product."
+        )
+
+    product = session.exec(select(Product).where(Product.product_id == claim_in.product_id)).first()
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Registered product '{claim_in.product_id}' was not found in the product catalog."
+        )
+
+    # Ownership validation: Customers may only file claims for products they own
+    if current_user and current_user.role == "customer":
+        user_warranties = session.exec(
+            select(Warranty.product_id).where(Warranty.user_id == current_user.id)
+        ).all()
+        is_owner = (product.user_id == current_user.id) or (product.product_id in user_warranties)
+        if not is_owner and product.user_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: You do not have permission to file a claim for product '{product.product_id}' belonging to another customer."
+            )
+
+    # Active Warranty validation: Product must have registered warranty
+    warranty = session.exec(select(Warranty).where(Warranty.product_id == product.product_id)).first()
+    if not warranty:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No warranty coverage found for product '{product.product_id}'. Only products with active warranty coverage are eligible for claims."
+        )
+
+    if warranty.status and warranty.status.lower() in ["void", "cancelled"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Warranty '{warranty.warranty_id}' for product '{product.product_id}' is void ({warranty.status}). Cannot process claims for void warranties."
+        )
+
+    try:
+        w_end_dt = datetime.strptime(warranty.end_date[:10], "%Y-%m-%d").date()
+        days_remaining = (w_end_dt - today).days
+        if days_remaining < -7:  # 7-day grace period matching check_warranty endpoint
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Warranty '{warranty.warranty_id}' expired on {warranty.end_date[:10]} ({abs(days_remaining)} days ago). Claims cannot be filed for expired warranties."
+            )
+    except (ValueError, TypeError):
+        pass
+
+    # Assign claim ownership (if employee/admin assisted intake, assign to customer owner)
+    claim_user_id = current_user.id if current_user else None
+    if current_user and current_user.role in ["employee", "admin"] and product.user_id:
+        claim_user_id = product.user_id
 
     # Generate claim ID
     short_uuid = str(uuid.uuid4())[:8].upper()
     claim_id = f"CLM-2026-{short_uuid}"
-    product_id = claim_in.product_id or f"PRD-{short_uuid[:6]}"
-
-    # Calculate dates & derived metrics
-    today = datetime.utcnow().date()
+    product_id = product.product_id
     sub_date = today.strftime("%Y-%m-%d")
 
     try:
@@ -310,7 +364,7 @@ def submit_claim(
     # 2. Construct DB Record
     db_claim = Claim(
         claim_id=claim_id,
-        user_id=current_user.id if current_user else None,
+        user_id=claim_user_id,
         product_id=product_id,
         product_name=claim_in.product_name,
         product_category=claim_in.product_category,
@@ -395,9 +449,16 @@ def submit_claim(
         action="AUTO_ADJUDICATED",
         details=f"Status: {eval_result['adjudication_status']} | Final Conf: {eval_result['final_confidence']*100:.1f}% | Match: {eval_result['match_category']}.",
     )
+    log_warranty = ClaimAuditLog(
+        claim_id=claim_id,
+        actor="Security_Engine",
+        action="WARRANTY_VERIFIED",
+        details=f"Product {product.product_id} verified with active warranty {warranty.warranty_id} (Status: {warranty.status}, Ends: {warranty.end_date[:10]}).",
+    )
     session.add(log1)
     session.add(log2)
     session.add(log3)
+    session.add(log_warranty)
 
     if serial_mismatch:
         log_mismatch = ClaimAuditLog(

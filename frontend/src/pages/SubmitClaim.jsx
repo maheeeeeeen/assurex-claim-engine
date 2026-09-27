@@ -18,6 +18,7 @@ import {
 } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { claimsAPI, productsAPI, warrantiesAPI } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { 
   FaShieldAlt, 
   FaUpload, 
@@ -81,6 +82,8 @@ const INITIAL_FORM_STATE = {
 
 export default function SubmitClaim() {
   const navigate = useNavigate();
+  const { role, user } = useAuth();
+  const isAssistedIntake = role === 'employee' || role === 'admin';
 
   const [products, setProducts] = useState([]);
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -396,6 +399,109 @@ export default function SubmitClaim() {
     return mismatches;
   })();
 
+  // Task 3: Evaluate warranty eligibility for linked registered product
+  const warrantyEligibility = (() => {
+    if (!linkedProduct) {
+      return {
+        eligible: false,
+        status: 'unselected',
+        badgeVariant: 'secondary',
+        badgeText: 'No Product Selected',
+        reason: 'A registered product must be selected and linked before a claim can be submitted.',
+      };
+    }
+
+    if (!linkedProduct.warranty_id && !linkedProduct.warranty_end) {
+      return {
+        eligible: false,
+        status: 'no_warranty',
+        badgeVariant: 'danger',
+        badgeText: 'No Warranty Record',
+        reason: `Product '${linkedProduct.product_id}' has no registered warranty on file. Only products with active warranty coverage are eligible for claims.`,
+      };
+    }
+
+    const statusLower = (linkedProduct.warranty_status || '').toLowerCase();
+    if (statusLower.includes('void') || statusLower.includes('cancel')) {
+      return {
+        eligible: false,
+        status: 'void',
+        badgeVariant: 'danger',
+        badgeText: `Warranty ${linkedProduct.warranty_status || 'Void'}`,
+        reason: `Warranty for product '${linkedProduct.product_id}' is marked as ${linkedProduct.warranty_status}. Ineligible for claim processing.`,
+      };
+    }
+
+    if (linkedProduct.warranty_end) {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const [y, m, d] = linkedProduct.warranty_end.slice(0, 10).split('-').map(Number);
+        const endDate = new Date(y, m - 1, d);
+        const diffTime = endDate - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < -7) {
+          return {
+            eligible: false,
+            status: 'expired',
+            badgeVariant: 'danger',
+            badgeText: 'Warranty Expired',
+            remainingDays: diffDays,
+            reason: `Warranty for product '${linkedProduct.product_id}' expired on ${linkedProduct.warranty_end.slice(0, 10)} (${Math.abs(diffDays)} days ago, beyond the 7-day grace period). Claims cannot be filed for expired warranties.`,
+          };
+        } else if (diffDays < 0) {
+          return {
+            eligible: true,
+            status: 'grace_period',
+            badgeVariant: 'warning',
+            badgeText: `Grace Period (${diffDays + 7}d left)`,
+            remainingDays: diffDays,
+            reason: null,
+          };
+        } else if (diffDays <= 30) {
+          return {
+            eligible: true,
+            status: 'expiring_soon',
+            badgeVariant: 'warning',
+            badgeText: `Expiring Soon (${diffDays}d left)`,
+            remainingDays: diffDays,
+            reason: null,
+          };
+        } else {
+          return {
+            eligible: true,
+            status: 'active',
+            badgeVariant: 'success',
+            badgeText: `Active Coverage (${diffDays}d left)`,
+            remainingDays: diffDays,
+            reason: null,
+          };
+        }
+      } catch (err) {
+        // Fallback to checking status string
+      }
+    }
+
+    if (statusLower.includes('expired')) {
+      return {
+        eligible: false,
+        status: 'expired',
+        badgeVariant: 'danger',
+        badgeText: 'Warranty Expired',
+        reason: `Warranty for product '${linkedProduct.product_id}' has expired.`,
+      };
+    }
+
+    return {
+      eligible: true,
+      status: 'active',
+      badgeVariant: 'success',
+      badgeText: linkedProduct.warranty_status || 'Active Coverage',
+      reason: null,
+    };
+  })();
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
@@ -463,11 +569,23 @@ export default function SubmitClaim() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    if (!linkedProduct || !formData.product_id) {
+      setError('A registered product must be selected and linked before submitting a claim.');
+      return;
+    }
+
+    if (!warrantyEligibility.eligible) {
+      setError(warrantyEligibility.reason || 'This product is ineligible for warranty claim submission.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       const payload = {
         ...formData,
+        product_id: linkedProduct.product_id,
         purchase_price: parseFloat(formData.purchase_price) || 0.0,
         repair_history_count: parseInt(formData.repair_history_count, 10) || 0,
         ocr_extracted_json: ocrResult ? JSON.stringify(ocrResult) : null,
@@ -547,54 +665,119 @@ export default function SubmitClaim() {
             </Col>
           </Row>
 
-          {/* Linked Product Active Indicator */}
-          {linkedProduct && (
-            <div className="mt-3 p-2 px-3 rounded bg-info bg-opacity-10 border border-info border-opacity-25 d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
-              <div className="d-flex align-items-center gap-2 small">
-                <Badge bg="info" className="text-dark fw-bold">
-                  <FaLink size={10} className="me-1" /> LINKED
-                </Badge>
-                <span className="text-white">
-                  Linked to Product <strong className="font-mono text-info">{linkedProduct.product_id}</strong> — {linkedProduct.name} ({linkedProduct.brand})
-                </span>
-                <span className="text-muted font-mono" style={{ fontSize: '0.75rem' }}>
-                  [SN: {linkedProduct.serial_number}]
+          {/* Unlinked Product Requirement Notice (Task 3) */}
+          {!linkedProduct && (
+            <div 
+              className="mt-3 p-3 rounded d-flex align-items-center gap-2 small"
+              style={{
+                backgroundColor: 'rgba(13, 202, 240, 0.12)',
+                border: '1px solid rgba(13, 202, 240, 0.35)',
+                color: '#e0f7fa'
+              }}
+            >
+              <FaShieldAlt className="flex-shrink-0 text-info" size={16} />
+              <div>
+                <strong className="text-info">Product Selection Required:</strong>{' '}
+                <span>
+                  Warranty claims must be filed against an owned, registered product with active warranty coverage. Select your product from the dropdown above and click <strong>"Autofill Product & Warranty Details"</strong>.
                 </span>
               </div>
-              <div className="d-flex align-items-center gap-2">
-                <Button 
-                  size="sm" 
-                  variant="outline-info" 
-                  className="py-0 px-2"
-                  style={{ fontSize: '0.75rem' }}
-                  onClick={() => {
-                    const el = document.getElementById('registered-product-select');
-                    if (el) el.focus();
+            </div>
+          )}
+
+          {/* Linked Product Active Indicator & Warranty Eligibility */}
+          {linkedProduct && (
+            <div className="mt-3 p-3 rounded bg-info bg-opacity-10 border border-info border-opacity-25">
+              <div className="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
+                <div className="d-flex flex-wrap align-items-center gap-2 small">
+                  <Badge bg="info" className="text-dark fw-bold">
+                    <FaLink size={10} className="me-1" /> LINKED
+                  </Badge>
+                  {isAssistedIntake && (
+                    <Badge bg="warning" className="text-dark fw-bold">
+                      <FaShieldAlt size={9} className="me-1" /> ASSISTED INTAKE
+                    </Badge>
+                  )}
+                  <Badge 
+                    bg={warrantyEligibility.badgeVariant} 
+                    className={warrantyEligibility.badgeVariant === 'warning' ? 'text-dark fw-bold' : 'fw-bold'}
+                  >
+                    {warrantyEligibility.badgeText}
+                  </Badge>
+                  <span className="text-white">
+                    Linked to Product <strong className="font-mono text-info">{linkedProduct.product_id}</strong> — {linkedProduct.name} ({linkedProduct.brand})
+                  </span>
+                  <span className="text-muted font-mono" style={{ fontSize: '0.75rem' }}>
+                    [SN: {linkedProduct.serial_number}]
+                  </span>
+                </div>
+                <div className="d-flex align-items-center gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline-info" 
+                    className="py-0 px-2"
+                    style={{ fontSize: '0.75rem' }}
+                    onClick={() => {
+                      const el = document.getElementById('registered-product-select');
+                      if (el) el.focus();
+                    }}
+                  >
+                    <FaExchangeAlt size={10} className="me-1" /> Change Product
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline-danger" 
+                    className="py-0 px-2"
+                    style={{ fontSize: '0.75rem' }}
+                    onClick={handleUnlinkProduct}
+                  >
+                    <FaUnlink size={10} className="me-1" /> Unlink
+                  </Button>
+                </div>
+              </div>
+
+              {/* Ineligible Warranty Alert — High-contrast translucent red styling */}
+              {!warrantyEligibility.eligible && (
+                <div 
+                  className="mt-3 p-3 rounded d-flex align-items-start gap-2"
+                  style={{
+                    backgroundColor: 'rgba(220, 53, 69, 0.15)',
+                    border: '1px solid rgba(220, 53, 69, 0.45)',
+                    color: '#f8d7da'
                   }}
                 >
-                  <FaExchangeAlt size={10} className="me-1" /> Change Product
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline-danger" 
-                  className="py-0 px-2"
-                  style={{ fontSize: '0.75rem' }}
-                  onClick={handleUnlinkProduct}
-                >
-                  <FaUnlink size={10} className="me-1" /> Unlink
-                </Button>
-              </div>
+                  <FaTimesCircle className="flex-shrink-0 mt-1 text-danger" size={16} />
+                  <div className="small">
+                    <strong className="text-danger d-block mb-1" style={{ fontSize: '0.88rem' }}>
+                      Warranty Ineligible for Claims
+                    </strong>
+                    <span style={{ color: '#fca5a5' }}>
+                      {warrantyEligibility.reason}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Soft Mismatch Warning Banner */}
           {linkedProduct && Object.keys(fieldMismatches).length > 0 && (
-            <Alert variant="warning" className="mt-3 mb-0 py-2 px-3 small border-0 bg-warning bg-opacity-10 text-warning d-flex align-items-start gap-2">
-              <FaExclamationTriangle className="flex-shrink-0 mt-1" />
+            <div 
+              className="mt-3 p-3 rounded d-flex align-items-start gap-2 small"
+              style={{
+                backgroundColor: 'rgba(255, 193, 7, 0.12)',
+                border: '1px solid rgba(255, 193, 7, 0.35)',
+                color: '#fff3cd'
+              }}
+            >
+              <FaExclamationTriangle className="flex-shrink-0 mt-1 text-warning" size={16} />
               <div>
-                <strong>Modified from registered product data:</strong> You have edited {Object.keys(fieldMismatches).length} field(s) away from the registered specs ({Object.keys(fieldMismatches).map((k) => fieldLabels[k] || k).join(', ')}). This will not block submission, but discrepancies may require manual review by an adjudicator.
+                <strong className="text-warning">Modified from registered product data:</strong>{' '}
+                <span className="text-light">
+                  You have edited {Object.keys(fieldMismatches).length} field(s) away from the registered specs ({Object.keys(fieldMismatches).map((k) => fieldLabels[k] || k).join(', ')}). This will not block submission, but discrepancies may require manual review by an adjudicator.
+                </span>
               </div>
-            </Alert>
+            </div>
           )}
         </Card.Body>
       </Card>
@@ -617,6 +800,8 @@ export default function SubmitClaim() {
                       value={formData.product_name}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "Select registered product above..." : ""}
                       className={fieldMismatches.product_name ? 'border-warning' : ''}
                     />
                     {fieldMismatches.product_name && (
@@ -634,6 +819,7 @@ export default function SubmitClaim() {
                       value={formData.product_category}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
                       className={fieldMismatches.product_category ? 'border-warning' : ''}
                     >
                       <option value="">Select Category...</option>
@@ -661,6 +847,8 @@ export default function SubmitClaim() {
                       value={formData.brand}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "Select registered product above..." : ""}
                       className={fieldMismatches.brand ? 'border-warning' : ''}
                     />
                     {fieldMismatches.brand && (
@@ -678,6 +866,8 @@ export default function SubmitClaim() {
                       value={formData.model_number}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "Select registered product above..." : ""}
                       className={fieldMismatches.model_number ? 'border-warning' : ''}
                     />
                     {fieldMismatches.model_number && (
@@ -695,6 +885,8 @@ export default function SubmitClaim() {
                       value={formData.serial_number_entered}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "Select registered product above..." : ""}
                       className={`font-mono ${fieldMismatches.serial_number_entered ? 'border-warning' : ''}`}
                     />
                     {fieldMismatches.serial_number_entered && (
@@ -714,6 +906,8 @@ export default function SubmitClaim() {
                       value={formData.purchase_price}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "0.00" : ""}
                       className={fieldMismatches.purchase_price ? 'border-warning' : ''}
                     />
                     {fieldMismatches.purchase_price && (
@@ -731,6 +925,8 @@ export default function SubmitClaim() {
                       value={formData.retailer}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "Select registered product above..." : ""}
                       className={fieldMismatches.retailer ? 'border-warning' : ''}
                     />
                     {fieldMismatches.retailer && (
@@ -749,6 +945,7 @@ export default function SubmitClaim() {
                       value={formData.purchase_date}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
                       className={fieldMismatches.purchase_date ? 'border-warning' : ''}
                     />
                     {fieldMismatches.purchase_date && (
@@ -776,6 +973,8 @@ export default function SubmitClaim() {
                       value={formData.warranty_provider}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
+                      placeholder={!linkedProduct ? "Select registered product above..." : ""}
                       className={fieldMismatches.warranty_provider ? 'border-warning' : ''}
                     />
                     {fieldMismatches.warranty_provider && (
@@ -793,6 +992,7 @@ export default function SubmitClaim() {
                       value={formData.warranty_type}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
                       className={fieldMismatches.warranty_type ? 'border-warning' : ''}
                     >
                       <option value="">Select Coverage Type...</option>
@@ -816,6 +1016,7 @@ export default function SubmitClaim() {
                       value={formData.warranty_end}
                       onChange={handleInputChange}
                       required
+                      disabled={!linkedProduct}
                       className={fieldMismatches.warranty_end ? 'border-warning' : ''}
                     />
                     {fieldMismatches.warranty_end && (
@@ -1293,11 +1494,12 @@ export default function SubmitClaim() {
                     <FaUndo />
                   </Button>
                   <Button 
+                    id="btn-trigger-adjudication"
                     type="submit" 
-                    variant="primary" 
+                    variant={!linkedProduct || !warrantyEligibility.eligible ? "secondary" : "primary"} 
                     size="lg" 
                     className="flex-grow-1 py-3 fw-extrabold shadow-sm d-flex align-items-center justify-content-center gap-2"
-                    disabled={submitting}
+                    disabled={submitting || !linkedProduct || !warrantyEligibility.eligible}
                   >
                     {submitting ? (
                       <>
@@ -1313,9 +1515,21 @@ export default function SubmitClaim() {
                   </Button>
                 </div>
 
-                <div className="text-center mt-3 text-muted" style={{ fontSize: '0.72rem' }}>
-                  ⚡ Auto-renders 1200×1680 card, runs XGBoost tabular inference, MobileNetV2 vision inference, and deterministic rule arbitration.
-                </div>
+                {!linkedProduct ? (
+                  <div className="text-center mt-3 text-warning small fw-semibold d-flex align-items-center justify-content-center gap-1">
+                    <FaExclamationTriangle size={12} />
+                    <span>Select and link a registered product above to enable claim submission.</span>
+                  </div>
+                ) : !warrantyEligibility.eligible ? (
+                  <div className="text-center mt-3 text-danger small fw-semibold d-flex align-items-center justify-content-center gap-1">
+                    <FaTimesCircle size={12} />
+                    <span>{warrantyEligibility.reason}</span>
+                  </div>
+                ) : (
+                  <div className="text-center mt-3 text-muted" style={{ fontSize: '0.72rem' }}>
+                    ⚡ Auto-renders 1200×1680 card, runs XGBoost tabular inference, MobileNetV2 vision inference, and deterministic rule arbitration.
+                  </div>
+                )}
               </Card.Body>
             </Card>
           </Col>
