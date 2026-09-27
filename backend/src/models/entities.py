@@ -42,6 +42,8 @@ class Product(SQLModel, table=True):
     retailer: str
     purchase_date: str
     warranty_duration_months: int = Field(default=24)
+    warranty_status: Optional[str] = Field(default="Active", index=True)
+    user_id: Optional[int] = Field(default=None, index=True)
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
 
 
@@ -107,11 +109,14 @@ class Claim(SQLModel, table=True):
     repair_report_uploaded: bool = Field(default=False)
     missing_doc_count: int = Field(default=0)
 
-    # Stored file paths
+    # Stored file paths & cryptographic hashes
     receipt_path: Optional[str] = None
+    receipt_hash: Optional[str] = Field(default=None, index=True)
     warranty_card_path: Optional[str] = None
+    warranty_card_hash: Optional[str] = Field(default=None, index=True)
     product_image_path: Optional[str] = None
     fault_evidence_path: Optional[str] = None
+    fault_evidence_hash: Optional[str] = Field(default=None, index=True)
     card_image_path: Optional[str] = None  # 1200x1680 High-DPI Claim Summary Card
 
     # Anomaly flags

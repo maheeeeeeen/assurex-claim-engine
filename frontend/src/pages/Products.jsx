@@ -307,20 +307,21 @@ export default function Products() {
                     <th>Hardware Serial #</th>
                     <th>Purchase Price</th>
                     <th>Purchase Date</th>
+                    <th>Warranty Status</th>
                     <th className="text-end">Claim Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {loadingProducts ? (
                     <tr>
-                      <td colSpan="8" className="text-center py-5">
+                      <td colSpan="9" className="text-center py-5">
                         <Spinner animation="border" variant="primary" size="sm" className="me-2" />
                         Loading product catalog...
                       </td>
                     </tr>
                   ) : filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan="8" className="text-center py-5 text-muted">
+                      <td colSpan="9" className="text-center py-5 text-muted">
                         No products found matching your search.
                       </td>
                     </tr>
@@ -341,6 +342,15 @@ export default function Products() {
                         <td className="font-mono text-light small fw-bold">{p.serial_number}</td>
                         <td className="font-mono text-success small">${p.purchase_price ? p.purchase_price.toFixed(2) : '0.00'}</td>
                         <td className="text-muted small">{p.purchase_date}</td>
+                        <td>
+                          <Badge 
+                            bg={p.warranty_status === 'Expired' ? 'danger' : 'success'} 
+                            className="d-inline-flex align-items-center gap-1 px-2 py-1"
+                          >
+                            {p.warranty_status === 'Expired' ? <FaTimesCircle size={10} /> : <FaCheckCircle size={10} />}
+                            <span>{p.warranty_status || 'Active'}</span>
+                          </Badge>
+                        </td>
                         <td className="text-end">
                           <Button
                             size="sm"

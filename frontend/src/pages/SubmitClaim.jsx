@@ -26,7 +26,11 @@ import {
   FaTimesCircle, 
   FaExclamationTriangle, 
   FaFileAlt, 
-  FaEye 
+  FaEye,
+  FaFingerprint,
+  FaCheck,
+  FaSyncAlt,
+  FaSearch
 } from 'react-icons/fa';
 
 export default function SubmitClaim() {
@@ -46,31 +50,34 @@ export default function SubmitClaim() {
   const [adjudicationResult, setAdjudicationResult] = useState(null);
   const [showResultModal, setShowResultModal] = useState(false);
 
-  // Form Fields
+  // Form Fields — initialized genuinely empty without mock data
   const [formData, setFormData] = useState({
-    product_name: 'Samsung 4K Smart TV',
-    product_category: 'Electronics',
-    brand: 'Samsung',
-    model_number: 'QN65Q80B',
-    serial_number_entered: 'SN-SAMS-9021',
-    purchase_price: 1299.99,
-    retailer: 'Best Buy',
-    purchase_date: '2025-01-15',
-    warranty_start: '2025-01-15',
-    warranty_end: '2027-01-15',
-    warranty_provider: 'Manufacturer Extended Care',
-    warranty_type: 'Extended Warranty',
-    fault_date: '2026-03-10',
-    fault_type: 'Display Artifacts',
-    damage_type: 'Internal Component Failure',
-    fault_description: 'Screen displays vertical green line and flickers during operation.',
+    product_name: '',
+    product_category: '',
+    brand: '',
+    model_number: '',
+    serial_number_entered: '',
+    purchase_price: '',
+    retailer: '',
+    purchase_date: '',
+    warranty_start: '',
+    warranty_end: '',
+    warranty_provider: '',
+    warranty_type: '',
+    fault_date: '',
+    fault_type: '',
+    damage_type: '',
+    fault_description: '',
     repair_history_count: 0,
     previous_repair_authorized: true,
-    receipt_uploaded: true,
-    warranty_card_uploaded: true,
-    product_image_uploaded: true,
-    fault_evidence_uploaded: true,
+    receipt_uploaded: false,
+    warranty_card_uploaded: false,
+    product_image_uploaded: false,
+    fault_evidence_uploaded: false,
     repair_report_uploaded: false,
+    receipt_path: null,
+    receipt_hash: null,
+    serial_number_on_receipt: null,
   });
 
   useEffect(() => {
@@ -132,17 +139,43 @@ export default function SubmitClaim() {
       const res = await claimsAPI.processOCR(data);
       setOcrResult(res.data);
 
-      // Auto-populate extracted serial number if found
-      if (res.data.detected_serials && res.data.detected_serials.length > 0) {
-        setFormData((prev) => ({
-          ...prev,
-          serial_number_entered: res.data.detected_serials[0],
-        }));
-      }
+      setFormData((prev) => ({
+        ...prev,
+        receipt_path: res.data.file_path,
+        receipt_hash: res.data.file_hash,
+        serial_number_on_receipt: res.data.serial_number || prev.serial_number_entered,
+      }));
     } catch (err) {
       console.error('OCR Processing error:', err);
+      setError('OCR document scanning encountered an error. You may still manually verify data.');
     } finally {
       setOcrLoading(false);
+    }
+  };
+
+  const handleApplyOcrToForm = () => {
+    if (!ocrResult) return;
+    setFormData((prev) => ({
+      ...prev,
+      retailer: ocrResult.retailer || ocrResult.merchant || prev.retailer,
+      purchase_date: ocrResult.purchase_date || prev.purchase_date,
+      warranty_start: ocrResult.purchase_date || prev.warranty_start,
+      purchase_price: ocrResult.purchase_amount !== null && ocrResult.purchase_amount !== undefined ? ocrResult.purchase_amount : prev.purchase_price,
+      serial_number_entered: ocrResult.serial_number || prev.serial_number_entered,
+      serial_number_on_receipt: ocrResult.serial_number || prev.serial_number_on_receipt,
+    }));
+  };
+
+  const getSerialReconciliation = () => {
+    if (!ocrResult || !ocrResult.serial_number) return null;
+    const entered = (formData.serial_number_entered || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const detected = (ocrResult.serial_number || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (entered && detected && entered === detected) {
+      return { status: 'match', text: 'Verified Match', message: 'Entered serial matches invoice serial exactly.' };
+    } else if (entered && detected && (entered.includes(detected) || detected.includes(entered))) {
+      return { status: 'partial', text: 'Partial Match', message: 'Entered serial corresponds to invoice document serial.' };
+    } else {
+      return { status: 'mismatch', text: 'Serial Mismatch', message: `Entered serial (${formData.serial_number_entered}) does not match document (${ocrResult.serial_number}).` };
     }
   };
 
@@ -156,6 +189,7 @@ export default function SubmitClaim() {
         ...formData,
         purchase_price: parseFloat(formData.purchase_price) || 0.0,
         repair_history_count: parseInt(formData.repair_history_count, 10) || 0,
+        ocr_extracted_json: ocrResult ? JSON.stringify(ocrResult) : null,
       };
 
       const res = await claimsAPI.submitClaim(payload);
@@ -228,6 +262,7 @@ export default function SubmitClaim() {
                       onChange={handleInputChange}
                       required
                     >
+                      <option value="">Select Category...</option>
                       <option value="Appliances">Appliances</option>
                       <option value="Electronics">Electronics</option>
                       <option value="Automotive">Automotive</option>
@@ -331,6 +366,7 @@ export default function SubmitClaim() {
                       onChange={handleInputChange}
                       required
                     >
+                      <option value="">Select Coverage Type...</option>
                       <option value="Manufacturer Standard">Manufacturer Standard</option>
                       <option value="Extended Warranty">Extended Warranty</option>
                       <option value="Retailer Protection">Retailer Protection</option>
@@ -378,6 +414,7 @@ export default function SubmitClaim() {
                       onChange={handleInputChange}
                       required
                     >
+                      <option value="">Select Damage Type...</option>
                       <option value="Internal Component Failure">Internal Component Failure (Covered)</option>
                       <option value="Mechanical Breakdown">Mechanical Breakdown (Covered)</option>
                       <option value="Electrical Short Circuit">Electrical Short Circuit (Covered)</option>
@@ -430,13 +467,96 @@ export default function SubmitClaim() {
                     </div>
                   )}
                   {ocrResult && (
-                    <div className="mt-2 p-2 rounded bg-surface border border-subtle small">
-                      <div className="fw-bold text-success d-flex align-items-center gap-1">
-                        <FaCheckCircle /> Document Scanned
+                    <div className="mt-3 p-3 rounded bg-surface border border-secondary border-opacity-25 shadow-sm">
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="fw-bold text-white small d-flex align-items-center gap-1">
+                          <FaCheckCircle className="text-success" /> Extracted-Data Verification
+                        </span>
+                        <div className="d-flex gap-1">
+                          <Badge bg="dark" className="border border-secondary text-info fw-normal" style={{ fontSize: '0.65rem' }}>
+                            {ocrResult.ocr_engine}
+                          </Badge>
+                          <Badge bg="success" style={{ fontSize: '0.65rem' }}>
+                            {Math.round(ocrResult.ocr_confidence * 100)}% Conf
+                          </Badge>
+                        </div>
                       </div>
-                      <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                        Merchant: {ocrResult.merchant || 'Recognized'} | Serials Detected: {ocrResult.detected_serials?.join(', ') || 'None'}
+
+                      {/* Cryptographic SHA-256 Fingerprint */}
+                      <div className="p-2 mb-2 rounded bg-black bg-opacity-50 border border-secondary border-opacity-25 small font-mono d-flex align-items-center gap-2">
+                        <FaFingerprint className="text-info flex-shrink-0" />
+                        <span className="text-truncate text-secondary" style={{ fontSize: '0.70rem' }} title={ocrResult.file_hash}>
+                          SHA-256: {ocrResult.file_hash}
+                        </span>
                       </div>
+
+                      {/* Duplicate Document Warning */}
+                      {ocrResult.is_duplicate_file && (
+                        <Alert variant="warning" className="small py-2 px-2 mb-2 d-flex align-items-start gap-2 border-0 bg-warning bg-opacity-10 text-warning">
+                          <FaExclamationTriangle className="flex-shrink-0 mt-1" />
+                          <div style={{ fontSize: '0.74rem' }}>
+                            <strong>Duplicate File Warning:</strong> This document hash was previously used in claim <Badge bg="warning" text="dark">{ocrResult.duplicate_claim_id}</Badge>. Resubmitting identical receipts triggers automated duplicate fraud flags.
+                          </div>
+                        </Alert>
+                      )}
+
+                      {/* Extracted Key-Value Summary */}
+                      <div className="small mb-2 p-2 rounded bg-black bg-opacity-25 border border-secondary border-opacity-25">
+                        <div className="d-flex justify-content-between py-1 border-bottom border-secondary border-opacity-25">
+                          <span className="text-muted">Detected Merchant:</span>
+                          <span className="text-white fw-semibold">{ocrResult.merchant || ocrResult.retailer || 'Authorized Retailer'}</span>
+                        </div>
+                        <div className="d-flex justify-content-between py-1 border-bottom border-secondary border-opacity-25">
+                          <span className="text-muted">Invoice Date:</span>
+                          <span className="text-white fw-semibold">{ocrResult.purchase_date || 'Not detected'}</span>
+                        </div>
+                        <div className="d-flex justify-content-between py-1 border-bottom border-secondary border-opacity-25">
+                          <span className="text-muted">Purchase Total:</span>
+                          <span className="text-white fw-semibold">
+                            {ocrResult.purchase_amount ? `$${parseFloat(ocrResult.purchase_amount).toFixed(2)}` : 'Not detected'}
+                          </span>
+                        </div>
+                        <div className="d-flex justify-content-between py-1">
+                          <span className="text-muted">Detected Serial:</span>
+                          <span className="text-info font-mono fw-semibold">{ocrResult.serial_number || 'None'}</span>
+                        </div>
+                      </div>
+
+                      {/* Cross-Source Serial Reconciliation Status */}
+                      {(() => {
+                        const recon = getSerialReconciliation();
+                        if (!recon) return null;
+                        const isMatch = recon.status === 'match';
+                        const isPartial = recon.status === 'partial';
+                        const badgeVariant = isMatch ? 'success' : (isPartial ? 'info' : 'danger');
+                        const Icon = isMatch ? FaCheckCircle : (isPartial ? FaCheckCircle : FaTimesCircle);
+                        return (
+                          <div className={`p-2 rounded border small mb-2 ${isMatch ? 'border-success border-opacity-25 bg-success bg-opacity-10' : 'border-danger border-opacity-25 bg-danger bg-opacity-10'}`}>
+                            <div className="d-flex justify-content-between align-items-center">
+                              <span className="fw-semibold text-light" style={{ fontSize: '0.74rem' }}>
+                                Cross-Source Serial Check:
+                              </span>
+                              <Badge bg={badgeVariant} className="d-inline-flex align-items-center gap-1">
+                                <Icon size={10} /> {recon.text}
+                              </Badge>
+                            </div>
+                            <div className="text-secondary mt-1" style={{ fontSize: '0.70rem' }}>
+                              {recon.message}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* One-Click Apply Button */}
+                      <Button 
+                        variant="outline-primary" 
+                        size="sm" 
+                        className="w-100 d-flex align-items-center justify-content-center gap-2 mt-1"
+                        onClick={handleApplyOcrToForm}
+                      >
+                        <FaSyncAlt size={11} />
+                        <span>Apply Extracted Values to Form</span>
+                      </Button>
                     </div>
                   )}
                 </div>
