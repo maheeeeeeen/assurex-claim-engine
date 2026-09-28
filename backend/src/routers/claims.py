@@ -14,11 +14,14 @@ import json
 import uuid
 from typing import List, Optional
 from datetime import datetime, date
+import io
+import csv
 from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile, Form
+from fastapi.responses import StreamingResponse, HTMLResponse
 from sqlmodel import Session, select, func
 
 from src.database_setup import get_session
-from src.models import Claim, ClaimAuditLog, User, Product, Warranty
+from src.models import Claim, ClaimAuditLog, User, Product, Warranty, Notification
 from src.auth.service import get_current_user, require_role
 from src.schemas.claims import (
     ClaimSubmitRequest, 
@@ -642,6 +645,17 @@ def submit_claim(
         )
         session.add(log_evidence)
 
+    # Generate notification for user
+    if claim_user_id:
+        notif = Notification(
+            user_id=claim_user_id,
+            title="Claim Submitted",
+            message=f"Your claim ({claim_id}) for {claim_in.product_name} has been received. Status: {eval_result['adjudication_status']}.",
+            type="claim_update",
+            link="/claims"
+        )
+        session.add(notif)
+        
     session.commit()
     session.refresh(db_claim)
     return db_claim
@@ -681,6 +695,60 @@ def list_claims(
     query = query.order_by(Claim.id.desc()).offset(skip).limit(limit)
     claims = session.exec(query).all()
     return claims
+
+
+@router.get("/export/csv")
+def export_claims_csv(
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["reviewer", "employee", "admin"]))
+):
+    """
+    Export filterable claims list as a CSV file for offline analysis.
+    (FR xlv: The system MUST support batch exporting of claim tables to CSV)
+    """
+    query = select(Claim)
+    
+    if status and status != "all":
+        query = query.where(Claim.adjudication_status == status)
+    if category and category != "all":
+        query = query.where(Claim.product_category == category)
+    if search:
+        search_filter = f"%{search}%"
+        query = query.where(
+            (Claim.claim_id.like(search_filter)) |
+            (Claim.product_name.like(search_filter)) |
+            (Claim.serial_number_entered.like(search_filter)) |
+            (Claim.brand.like(search_filter))
+        )
+        
+    claims = session.exec(query.order_by(Claim.id.desc())).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow([
+        "Claim ID", "Product", "Brand", "Serial Number", "Purchase Date", 
+        "Submission Date", "Status", "Stage", "AI Confidence", "Fault Description"
+    ])
+    
+    # Write data
+    for c in claims:
+        writer.writerow([
+            c.claim_id, c.product_name, c.brand, c.serial_number_entered, 
+            c.purchase_date, c.claim_submission_date, c.adjudication_status, 
+            c.adjudication_stage, f"{c.final_confidence*100:.1f}%", c.fault_description
+        ])
+        
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]), 
+        media_type="text/csv", 
+        headers={"Content-Disposition": "attachment; filename=claims_export.csv"}
+    )
 
 
 @router.get("/stats/summary", response_model=ClaimStatsResponse)
@@ -731,6 +799,23 @@ def get_claim_stats(session: Session = Depends(get_session)):
     }
 
 
+def generate_narrative_summary(claim, rule_eval, decision_reasons):
+    """Generates an automated narrative summary of the claim."""
+    summary = f"Claim {claim.claim_id} for a {claim.product_category} ({claim.brand}) was evaluated by the AssureX dual-model engine."
+    summary += f" The reported fault was '{claim.fault_type}'. "
+    
+    if claim.adjudication_status == "Manual Review Required":
+        summary += "The AI determined that this claim requires manual human review due to ambiguous or conflicting signals."
+    elif claim.adjudication_status in ["Auto-Approved", "Approved"]:
+        summary += f"The claim was {claim.adjudication_status.lower()} with a high confidence score of {claim.final_confidence*100:.1f}%."
+    else:
+        summary += f"The claim was {claim.adjudication_status.lower()}."
+        
+    if decision_reasons:
+        summary += f" Key factors influencing this decision include: {', '.join(decision_reasons)}."
+        
+    return summary
+
 @router.get("/{claim_id}")
 def get_claim_detail(
     claim_id: str,
@@ -753,16 +838,101 @@ def get_claim_detail(
     audit_logs = session.exec(
         select(ClaimAuditLog).where(ClaimAuditLog.claim_id == claim_id).order_by(ClaimAuditLog.id.asc())
     ).all()
+    
+    rule_evaluation = json.loads(claim.rule_evaluation_json) if claim.rule_evaluation_json else {}
+    decision_reasons = json.loads(claim.decision_reasons_json) if claim.decision_reasons_json else []
+    
+    narrative_summary = generate_narrative_summary(claim, rule_evaluation, decision_reasons)
 
     return {
         "claim": claim,
         "audit_logs": audit_logs,
-        "rule_evaluation": json.loads(claim.rule_evaluation_json) if claim.rule_evaluation_json else {},
-        "decision_reasons": json.loads(claim.decision_reasons_json) if claim.decision_reasons_json else [],
+        "rule_evaluation": rule_evaluation,
+        "decision_reasons": decision_reasons,
         "tabular_probabilities": json.loads(claim.tabular_probabilities_json) if claim.tabular_probabilities_json else {},
         "tm_probabilities": json.loads(claim.tm_probabilities_json) if claim.tm_probabilities_json else {},
         "cross_verification": json.loads(claim.cross_verification_json) if claim.cross_verification_json else None,
+        "narrative_summary": narrative_summary
     }
+
+
+@router.get("/{claim_id}/export/html", response_class=HTMLResponse)
+def export_claim_dossier_html(
+    claim_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["reviewer", "admin", "employee"]))
+):
+    """
+    Export a comprehensive Claim Dossier in HTML format.
+    (FR xliv: Adjudicators MUST have the ability to export a comprehensive Claim Dossier in PDF or HTML format)
+    """
+    claim = session.exec(select(Claim).where(Claim.claim_id == claim_id)).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+        
+    logs = session.exec(select(ClaimAuditLog).where(ClaimAuditLog.claim_id == claim_id).order_by(ClaimAuditLog.id)).all()
+    
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Claim Dossier - {claim.claim_id}</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; margin: 40px; color: #333; }}
+            h1 {{ color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; }}
+            h2 {{ color: #0056b3; margin-top: 30px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 15px; }}
+            th, td {{ padding: 10px; border: 1px solid #ddd; text-align: left; }}
+            th {{ background-color: #f8f9fa; font-weight: bold; width: 30%; }}
+            .status-badge {{ display: inline-block; padding: 5px 10px; border-radius: 5px; font-weight: bold; background: #e9ecef; }}
+            .log-table th {{ background-color: #e9ecef; width: auto; }}
+        </style>
+    </head>
+    <body>
+        <h1>Claim Dossier: {claim.claim_id}</h1>
+        
+        <h2>Overview</h2>
+        <table>
+            <tr><th>Status</th><td><span class="status-badge">{claim.adjudication_status}</span></td></tr>
+            <tr><th>Stage</th><td>{claim.adjudication_stage}</td></tr>
+            <tr><th>Submitted On</th><td>{claim.claim_submission_date}</td></tr>
+            <tr><th>Product</th><td>{claim.product_name} ({claim.brand})</td></tr>
+            <tr><th>Serial Number</th><td>{claim.serial_number_entered}</td></tr>
+            <tr><th>Fault Description</th><td>{claim.fault_description}</td></tr>
+            <tr><th>Purchase Date</th><td>{claim.purchase_date}</td></tr>
+            <tr><th>AI Confidence</th><td>{claim.final_confidence * 100:.1f}%</td></tr>
+        </table>
+        
+        <h2>AI Evaluation Metrics</h2>
+        <table>
+            <tr><th>Match Category</th><td>{claim.match_category}</td></tr>
+            <tr><th>Tabular Prediction</th><td>{claim.tabular_prediction} ({claim.tabular_confidence * 100:.1f}%)</td></tr>
+            <tr><th>Vision Prediction</th><td>{claim.tm_prediction} ({claim.tm_confidence * 100:.1f}%)</td></tr>
+            <tr><th>Decision Summary</th><td>{claim.decision_reason_summary}</td></tr>
+        </table>
+        
+        <h2>Audit Log</h2>
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Actor</th>
+                    <th>Action</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {"".join([f"<tr><td>{log.timestamp}</td><td>{log.actor}</td><td>{log.action}</td><td>{log.details}</td></tr>" for log in logs])}
+            </tbody>
+        </table>
+        
+        <p style="margin-top: 50px; font-size: 0.9em; color: #666; border-top: 1px solid #ddd; padding-top: 10px;">
+            Generated by AssureX Claim Engine on {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")} UTC.
+        </p>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
 
 
 @router.post("/{claim_id}/adjudicate")
@@ -806,6 +976,18 @@ def adjudicate_claim_manual(
     )
     session.add(claim)
     session.add(log)
+    
+    # Generate notification for user
+    if claim.user_id:
+        notif = Notification(
+            user_id=claim.user_id,
+            title="Claim Status Updated",
+            message=f"Your claim ({claim_id}) status has been updated to {new_status}.",
+            type="claim_update",
+            link="/claims"
+        )
+        session.add(notif)
+        
     session.commit()
     session.refresh(claim)
 

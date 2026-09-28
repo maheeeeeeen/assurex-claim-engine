@@ -6,6 +6,7 @@ from .entities import (
     Warranty,
     Claim,
     ClaimAuditLog,
+    Notification,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "Warranty",
     "Claim",
     "ClaimAuditLog",
+    "Notification",
 ]

@@ -80,6 +80,20 @@
 - **Testing performed:** Executed automated integration test suite (`backend/tests/test_e2e.py`) testing all REST endpoints, auth flows, live claim submission, and reviewer overrides (100% pass); verified frontend production build (`npm run build`).
 - **Verified by:** Team Lead
 
+## 2026-09-28 — Google Antigravity (Gemini)
+- **Purpose:** Issue 6, 7, and 8 Implementations
+- **Prompt/assistance type:** "Implement 30-day prior notifications, CSV/HTML exports, and bundle demo claims"
+- **Files/modules affected:**
+  - `backend/src/routers/notifications.py`
+  - `backend/src/routers/claims.py`
+  - `frontend/src/components/NotificationDropdown.jsx`
+  - `frontend/src/pages/ClaimsList.jsx`
+  - `frontend/src/pages/ClaimDetail.jsx`
+  - `sample_claims/`
+- **Modifications made by team:** Connected frontend export buttons to API routes generating dynamic CSV and HTML templates. Extracted test claims for demo bundle.
+- **Testing performed:** Tested CSV and HTML download behavior in browser UI. Verified file contents.
+- **Verified by:** Team Lead
+
 ---
 
 *Entries will be added for every AI-assisted development session.*

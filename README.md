@@ -57,7 +57,7 @@ assurex-claim-engine/
 │       ├── pages/               # One file per route
 │       ├── components/          # Reusable UI pieces
 │       └── routes/              # Protected/role-based route wrappers
-├── sample_claims/               # Demo claims for testing
+├── sample_claims/               # 11 mandatory Demo claims for testing (JSON and Images)
 ├── documentation/               # Report, diagrams
 ├── screenshots/                 # TM training, app screenshots
 └── reports/                     # Model comparison report, analytics

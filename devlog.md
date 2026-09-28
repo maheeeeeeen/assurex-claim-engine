@@ -105,6 +105,15 @@
 - **Changes made:** Backend models, schemas, auth, routers, services, frontend pages, design system, test suite, and build bundle.
 - **Tests run:** Executed `python -m tests.test_e2e` (ALL PASSED), verified frontend production build with `npm run build` (0 errors), and verified dual-model adjudication on live submissions.
 
+### Session 6: Notifications, CSV/HTML Export, and Demo Claims Bundle
+- **What was built:**
+  - Implemented 30-day prior notification for expiring warranties (Issue 6) via `notifications.py` router and `NotificationDropdown.jsx`.
+  - Added Export HTML Dossier and Export CSV buttons/endpoints (Issue 7) in `claims.py`, `ClaimsList.jsx`, and `ClaimDetail.jsx`.
+  - Extracted 11 mandatory demo claims from the dataset and bundled them into `sample_claims/` (Issue 8).
+- **Problems hit:** Minor issues with missing `FaDownload` import in React, successfully resolved.
+- **Changes made:** `backend/src/routers/notifications.py`, `backend/src/routers/claims.py`, `frontend/src/components/NotificationDropdown.jsx`, `frontend/src/pages/ClaimsList.jsx`, `frontend/src/pages/ClaimDetail.jsx`.
+- **Tests run:** Tested rendering of Export buttons and logic for 11 demo claims.
+
 ---
 
 *Entries will be added after every development session.*
