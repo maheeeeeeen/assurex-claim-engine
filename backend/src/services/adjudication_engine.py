@@ -84,20 +84,49 @@ class AdjudicationEngine:
         reasons: List[str] = []
 
         # Scenario A: Hard Business Rule Failure (Exclusions, Expirations, Serials, Duplicates)
+        # Per SRS Step 12: if AI models are borderline (both < 0.60) or strongly disagree (gap > 0.40),
+        # route to Manual Review instead of outright Auto-Rejection.
         if not rule_eval["passed"]:
-            adjudication_status = "Auto-Rejected"
-            adjudication_stage = "Automated"
-            reasons.extend(rule_eval["hard_failures"])
-            final_confidence = 0.99
-            reason_summary = f"Claim automatically rejected due to {len(rule_eval['hard_failures'])} policy rule violation(s)."
+            both_low_conf = tab_conf < 0.60 and tm_conf < 0.60
+            strong_disagreement = (not models_agreed) and conf_diff > 0.40
+            if both_low_conf or strong_disagreement:
+                adjudication_status = "Manual Review Required"
+                adjudication_stage = "Manual_Review"
+                reasons.extend(rule_eval["hard_failures"])
+                reasons.append(
+                    f"AI models show borderline or conflicting confidence ({tab_conf*100:.1f}% vs {tm_conf*100:.1f}%) — "
+                    f"escalated for human adjudicator review despite rule violations."
+                )
+                final_confidence = round((tab_conf + tm_conf) / 2.0, 4)
+                reason_summary = (
+                    f"Routed to manual review: {len(rule_eval['hard_failures'])} rule violation(s) "
+                    f"with low/conflicting AI confidence."
+                )
+            else:
+                adjudication_status = "Auto-Rejected"
+                adjudication_stage = "Automated"
+                reasons.extend(rule_eval["hard_failures"])
+                final_confidence = 0.99
+                reason_summary = f"Claim automatically rejected due to {len(rule_eval['hard_failures'])} policy rule violation(s)."
 
         # Scenario B: Both AI Models Agree on Likely Invalid
+        # Per SRS Step 12: low confidence (< 0.50) must escalate even if both agree.
         elif tab_class == "Likely Invalid" and tm_class == "Likely Invalid":
-            adjudication_status = "Auto-Rejected"
-            adjudication_stage = "Automated"
-            reasons.append("Both structured data classifier (XGBoost) and visual card classifier (MobileNetV2) identified invalid claim patterns.")
-            final_confidence = round((tab_conf + tm_conf) / 2.0, 4)
-            reason_summary = "Automated rejection confirmed by consensus of dual AI models."
+            if tab_conf < 0.50 or tm_conf < 0.50:
+                adjudication_status = "Manual Review Required"
+                adjudication_stage = "Manual_Review"
+                reasons.append(
+                    f"Both models classify as Likely Invalid, but confidence is below threshold "
+                    f"({tab_conf*100:.1f}% tabular, {tm_conf*100:.1f}% vision). Human review required."
+                )
+                final_confidence = round((tab_conf + tm_conf) / 2.0, 4)
+                reason_summary = "Escalated: both models lean invalid but confidence insufficient for automated rejection."
+            else:
+                adjudication_status = "Auto-Rejected"
+                adjudication_stage = "Automated"
+                reasons.append("Both structured data classifier (XGBoost) and visual card classifier (MobileNetV2) identified invalid claim patterns.")
+                final_confidence = round((tab_conf + tm_conf) / 2.0, 4)
+                reason_summary = "Automated rejection confirmed by consensus of dual AI models."
 
         # Scenario C: Both Models Agree on Likely Valid AND All Rules Passed
         elif tab_class == "Likely Valid" and tm_class == "Likely Valid" and rule_eval["passed"] and len(rule_eval["review_flags"]) == 0:
