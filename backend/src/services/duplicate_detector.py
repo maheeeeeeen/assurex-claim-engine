@@ -189,6 +189,35 @@ class DuplicateDetector:
                         ),
                     }
 
+        # Factor 4: Repeated Hardware Serial Number Claim
+        # Flag if the same serial number has any prior claim, regardless of description similarity.
+        # Prevents filing multiple claims on the same physical device with different wordings.
+        if norm_serial:
+            serial_query = select(Claim).where(
+                Claim.serial_number_entered == serial_number.strip()
+            )
+            if current_claim_id:
+                serial_query = serial_query.where(Claim.claim_id != current_claim_id)
+            prior_serial_claims = session.exec(serial_query).all()
+            # Only flag if there's a prior claim that isn't already rejected
+            active_serial_claims = [
+                c for c in prior_serial_claims
+                if c.adjudication_status not in ("Auto-Rejected", "Rejected")
+            ]
+            if active_serial_claims:
+                prior = active_serial_claims[0]
+                return {
+                    "is_duplicate": True,
+                    "duplicate_type": "repeated_serial_number",
+                    "matched_claim_id": prior.claim_id,
+                    "similarity_score": 1.0,
+                    "details": (
+                        f"Hardware serial '{serial_number.strip()}' was already submitted in claim "
+                        f"{prior.claim_id} (status: {prior.adjudication_status}). "
+                        f"Multiple claims on the same device serial are not permitted."
+                    ),
+                }
+
         return {
             "is_duplicate": False,
             "duplicate_type": None,
