@@ -41,8 +41,15 @@ class TeachableMachinePredictor:
         self._load_labels()
         self._load_model()
 
+    LABEL_NAME_MAP = {
+        "likely_valid": "Likely Valid",
+        "likely_invalid": "Likely Invalid",
+        "manual_review": "Manual Review Required",
+        "manual_review_required": "Manual Review Required",
+    }
+
     def _load_labels(self):
-        """Loads class label mapping from labels.txt if present."""
+        """Loads class label mapping from labels.txt if present and maps to canonical names."""
         if os.path.exists(self.labels_path):
             try:
                 loaded_labels = []
@@ -51,27 +58,100 @@ class TeachableMachinePredictor:
                         line = line.strip()
                         if line:
                             parts = line.split(" ", 1)
-                            if len(parts) == 2 and parts[0].isdigit():
-                                loaded_labels.append(parts[1])
-                            else:
-                                loaded_labels.append(line)
+                            raw = parts[1] if len(parts) == 2 and parts[0].isdigit() else line
+                            canonical = self.LABEL_NAME_MAP.get(raw.strip().lower().replace(" ", "_"), raw.strip())
+                            loaded_labels.append(canonical)
                 if loaded_labels:
                     self.labels = loaded_labels
             except Exception as e:
                 print(f"[TeachableMachinePredictor] Warning reading labels: {e}")
 
+    def _reconstruct_and_load_h5(self, h5_path: str):
+        """Reconstructs MobileNetV2 architecture and loads layer weights from HDF5."""
+        import h5py
+        import tensorflow as tf
+
+        base = tf.keras.applications.MobileNetV2(
+            input_shape=(224, 224, 3),
+            alpha=0.35,
+            include_top=False,
+            pooling="avg",
+            weights=None
+        )
+        x = tf.keras.layers.Dense(100, activation="relu", name="dense_Dense1")(base.output)
+        out = tf.keras.layers.Dense(len(self.labels), activation="softmax", use_bias=False, name="dense_Dense2")(x)
+        model = tf.keras.Model(inputs=base.input, outputs=out, name="teachable_machine_mobilenetv2")
+
+        with h5py.File(h5_path, "r") as f:
+            mw = f["model_weights"]
+            if "sequential_1" in mw:
+                seq1_mw = mw["sequential_1"]
+                for layer in base.layers:
+                    if layer.name in seq1_mw:
+                        g = seq1_mw[layer.name]
+                        w_names = list(g.keys())
+                        weights = [np.array(g[k]) for k in w_names]
+                        if weights:
+                            layer.set_weights(weights)
+
+            if "sequential_3" in mw:
+                seq3_mw = mw["sequential_3"]
+                if "dense_Dense1" in seq3_mw and "dense_Dense1" in [l.name for l in model.layers]:
+                    d1 = model.get_layer("dense_Dense1")
+                    w = [np.array(seq3_mw["dense_Dense1"]["kernel:0"])]
+                    if "bias:0" in seq3_mw["dense_Dense1"]:
+                        w.append(np.array(seq3_mw["dense_Dense1"]["bias:0"]))
+                    d1.set_weights(w)
+
+                if "dense_Dense2" in seq3_mw and "dense_Dense2" in [l.name for l in model.layers]:
+                    d2 = model.get_layer("dense_Dense2")
+                    w = [np.array(seq3_mw["dense_Dense2"]["kernel:0"])]
+                    if "bias:0" in seq3_mw["dense_Dense2"]:
+                        w.append(np.array(seq3_mw["dense_Dense2"]["bias:0"]))
+                    d2.set_weights(w)
+
+        return model
+
     def _load_model(self):
-        """Loads Keras model artifact from disk."""
+        """Loads Keras model artifact from disk, handling Keras 2/3 compatibility."""
+        model_dir = os.path.dirname(self.model_path)
+        native_path = os.path.join(model_dir, "keras_model_native.keras")
+
+        # 1. Try loading pre-converted native Keras 3 format if available
+        if os.path.exists(native_path):
+            try:
+                import tensorflow as tf
+                self.model = tf.keras.models.load_model(native_path, compile=False)
+                print(f"[TeachableMachinePredictor] Loaded native model from {native_path}")
+                return
+            except Exception as e:
+                print(f"[TeachableMachinePredictor] Native load failed ({e}), attempting H5 load...")
+
         if not os.path.exists(self.model_path):
             print(f"[TeachableMachinePredictor] Model file not found at {self.model_path}")
             return
 
+        # 2. Try direct load_model on H5
         try:
             import tensorflow as tf
             self.model = tf.keras.models.load_model(self.model_path, compile=False)
             print(f"[TeachableMachinePredictor] Successfully loaded Teachable Machine model from {self.model_path}")
+            return
         except Exception as e:
-            print(f"[TeachableMachinePredictor] Error loading model: {e}")
+            print(f"[TeachableMachinePredictor] Standard H5 load encountered legacy format ({e}). Reconstructing architecture from weights...")
+
+        # 3. Fallback: Reconstruct exact MobileNetV2 architecture and transfer weights
+        try:
+            self.model = self._reconstruct_and_load_h5(self.model_path)
+            # Save native format for fast subsequent boots
+            try:
+                self.model.save(native_path)
+                print(f"[TeachableMachinePredictor] Cached native Keras model to {native_path}")
+            except Exception:
+                pass
+            print(f"[TeachableMachinePredictor] Successfully reconstructed and loaded model weights from {self.model_path}")
+        except Exception as e:
+            print(f"[TeachableMachinePredictor] Error reconstructing model from H5 weights: {e}")
 
     @property
     def is_ready(self) -> bool:
