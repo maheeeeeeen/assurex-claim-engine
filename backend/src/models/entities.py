@@ -179,3 +179,17 @@ class ClaimAuditLog(SQLModel, table=True):
     action: str  # SUBMITTED, OCR_EXTRACTED, RULES_RUN, ML_PREDICTED, ADJUDICATED, REVIEWER_ACTION
     details: str
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class Notification(SQLModel, table=True):
+    __tablename__ = "notifications"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(index=True)
+    title: str
+    message: str
+    type: str = Field(default="system", index=True)  # claim_submitted, claim_status_changed, info_requested, claim_approved, claim_rejected, warranty_expiry
+    link: Optional[str] = None
+    is_read: bool = Field(default=False, index=True)
+    created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
