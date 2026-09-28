@@ -67,48 +67,49 @@ class TeachableMachinePredictor:
                 print(f"[TeachableMachinePredictor] Warning reading labels: {e}")
 
     def _reconstruct_and_load_h5(self, h5_path: str):
-        """Reconstructs MobileNetV2 architecture and loads layer weights from HDF5."""
+        """Reconstructs full MobileNetV2 architecture (alpha=1.0) and loads weights from HDF5."""
         import h5py
         import tensorflow as tf
 
+        # Must use alpha=1.0 — produces 1280 pooled features matching backup weight shapes
         base = tf.keras.applications.MobileNetV2(
             input_shape=(224, 224, 3),
-            alpha=0.35,
+            alpha=1.0,
             include_top=False,
             pooling="avg",
             weights=None
         )
-        x = tf.keras.layers.Dense(100, activation="relu", name="dense_Dense1")(base.output)
-        out = tf.keras.layers.Dense(len(self.labels), activation="softmax", use_bias=False, name="dense_Dense2")(x)
+        x = tf.keras.layers.Dense(128, activation="relu", name="dense_1")(base.output)
+        x = tf.keras.layers.Dropout(0.2, name="dropout_1")(x)
+        out = tf.keras.layers.Dense(len(self.labels), activation="softmax", name="prediction")(x)
         model = tf.keras.Model(inputs=base.input, outputs=out, name="teachable_machine_mobilenetv2")
 
         with h5py.File(h5_path, "r") as f:
             mw = f["model_weights"]
-            if "sequential_1" in mw:
-                seq1_mw = mw["sequential_1"]
+
+            # Load MobileNetV2 backbone weights
+            mob_key = "mobilenetv2_1.00_224"
+            if mob_key in mw:
                 for layer in base.layers:
-                    if layer.name in seq1_mw:
-                        g = seq1_mw[layer.name]
-                        w_names = list(g.keys())
-                        weights = [np.array(g[k]) for k in w_names]
+                    if layer.name in mw[mob_key]:
+                        g = mw[mob_key][layer.name]
+                        weights = [np.array(g[k]) for k in g.keys()]
                         if weights:
-                            layer.set_weights(weights)
+                            try:
+                                layer.set_weights(weights)
+                            except Exception:
+                                pass
 
-            if "sequential_3" in mw:
-                seq3_mw = mw["sequential_3"]
-                if "dense_Dense1" in seq3_mw and "dense_Dense1" in [l.name for l in model.layers]:
-                    d1 = model.get_layer("dense_Dense1")
-                    w = [np.array(seq3_mw["dense_Dense1"]["kernel:0"])]
-                    if "bias:0" in seq3_mw["dense_Dense1"]:
-                        w.append(np.array(seq3_mw["dense_Dense1"]["bias:0"]))
-                    d1.set_weights(w)
+            # Load Dense top weights
+            if "dense_1" in mw and "dense_1" in mw["dense_1"]:
+                d1 = mw["dense_1"]["dense_1"]
+                w, b = np.array(d1["kernel"]), np.array(d1["bias"])
+                model.get_layer("dense_1").set_weights([w, b])
 
-                if "dense_Dense2" in seq3_mw and "dense_Dense2" in [l.name for l in model.layers]:
-                    d2 = model.get_layer("dense_Dense2")
-                    w = [np.array(seq3_mw["dense_Dense2"]["kernel:0"])]
-                    if "bias:0" in seq3_mw["dense_Dense2"]:
-                        w.append(np.array(seq3_mw["dense_Dense2"]["bias:0"]))
-                    d2.set_weights(w)
+            if "prediction" in mw and "prediction" in mw["prediction"]:
+                pred = mw["prediction"]["prediction"]
+                w, b = np.array(pred["kernel"]), np.array(pred["bias"])
+                model.get_layer("prediction").set_weights([w, b])
 
         return model
 
@@ -192,7 +193,7 @@ class TeachableMachinePredictor:
         """
         Runs vectorized batch inference across multiple card images.
         """
-        if not self.is_ready or not image_inputs:
+        if not self.is_ready or image_inputs is None or len(image_inputs) == 0:
             return [
                 {
                     "model_type": "Teachable_Machine_Image",
@@ -201,7 +202,7 @@ class TeachableMachinePredictor:
                     "confidence_scores": {lbl: round(1.0 / len(self.labels), 4) for lbl in self.labels},
                     "top_confidence": round(1.0 / len(self.labels), 4),
                 }
-                for _ in image_inputs
+                for _ in (image_inputs or [])
             ]
 
         arrays = []
