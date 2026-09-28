@@ -87,13 +87,13 @@
     - Routers: `/api/auth` (register, login, profile), `/api/claims` (submit, list, search, stats, dossier detail, adjuster manual adjudication), `/api/products` (catalog), `/api/warranties` (coverage status), `/api/policies` (thresholds), `/api/admin` (telemetry, re-seed).
     - Vectorized Seeder (`backend/src/routers/admin.py`): Populated SQLite database (`backend/database/assurex.db`) with default demo roles (`admin`, `adjuster_sarah`, `customer_mike`), catalog products, and 35 benchmark claims evaluated through both AI models.
   - **Frontend Application (React + Vite + Recharts + Custom CSS)**:
-    - High-contrast, enterprise-grade dark insurtech design system (`frontend/src/index.css`) with glassmorphism, responsive cards, glow accents, and Google Fonts (`Plus Jakarta Sans` & `JetBrains Mono`).
-    - `Dashboard.jsx`: Executive KPI widgets (auto-approval %, auto-rejection %, dual-brain AI agreement rate), interactive Recharts distribution donut and bar charts, and live claim stream.
+    - Dark-themed UI design system (`frontend/src/index.css`) with glassmorphism, responsive cards, glow accents, and Google Fonts (`Plus Jakarta Sans` & `JetBrains Mono`).
+    - `Dashboard.jsx`: KPI widgets (auto-approval %, auto-rejection %, dual-model agreement rate), interactive Recharts distribution donut and bar charts, and live claim stream.
     - `SubmitClaim.jsx`: Multi-step claim intake wizard with catalog pre-fill, receipt file upload, OCR pre-scan preview, and instant AI adjudication results modal.
     - `ClaimsList.jsx`: Searchable and filterable claims table with multi-attribute filtering (category, status, keyword).
-    - `ClaimDetail.jsx`: Adjudication dossier with 1200x1680 Claim Summary Card viewer + full-screen zoom modal, dual-model probability comparison bars, 8-point rule verification checklist, audit log timeline, and adjuster decision action panel.
+    - `ClaimDetail.jsx`: Adjudication dossier with 1200×1680 Claim Summary Card viewer + full-screen zoom modal, dual-model probability comparison bars, 8-point rule verification checklist, audit log timeline, and adjuster decision action panel.
     - `ReviewQueue.jsx`: Adjuster review docket focused on disputed, low-confidence, or manual-review claims.
-    - `Admin.jsx`: System diagnostics, neural model readiness check, and interactive confidence threshold sliders.
+    - `Admin.jsx`: System diagnostics, model readiness check, and interactive confidence threshold sliders.
     - `Products.jsx`: Hardware asset registry with direct "File Claim" actions.
     - `Navbar.jsx` & `Login.jsx`: One-click demo profile selectors for Chief Admin, Lead Adjuster, and Customer.
   - **Automated Integration Test Suite (`backend/tests/test_e2e.py`)**:
@@ -113,6 +113,121 @@
 - **Problems hit:** Minor issues with missing `FaDownload` import in React, successfully resolved.
 - **Changes made:** `backend/src/routers/notifications.py`, `backend/src/routers/claims.py`, `frontend/src/components/NotificationDropdown.jsx`, `frontend/src/pages/ClaimsList.jsx`, `frontend/src/pages/ClaimDetail.jsx`.
 - **Tests run:** Tested rendering of Export buttons and logic for 11 demo claims.
+
+---
+
+## Day 2 — 2026-09-27
+
+### Session 7: 10K Dataset, 8 Warranty Policies, Re-Training, and Admin Analytics
+- **What was built:**
+  - Regenerated synthetic dataset from 2,500 to **10,000 claim records** across 6 product categories: Electronics, Appliances, Automotive, Smartphones & Mobile, Computers & Laptops, Wearables & Audio.
+  - Added 5 new warranty policy JSON files (smartphones_and_mobile, computers_and_laptops, wearables_and_audio, home_office_and_furniture, power_tools_and_hardware) for a total of **8 policies**.
+  - Re-trained all 8 tabular classifiers on the expanded 10,000-record dataset. Updated `model_comparison.md` and `model_comparison.json`.
+  - Added Admin analytics dashboard tabs: `ClaimsAnalyticsTab.jsx`, `ModelPerformanceTab.jsx`, `OperationsTab.jsx`.
+- **Problems hit:** None.
+- **Changes made:** Dataset generator, all CSV splits, policy files, training pipeline, model artifacts, admin dashboard components.
+- **Tests run:** Verified dataset shape (10,000 records), stratified split balance, re-trained model metrics, admin dashboard rendering.
+
+### Session 8: Employee Role Support and User Profile Management
+- **What was built:**
+  - Added employee role support in auth and RBAC middleware.
+  - Built `ProfileModal.jsx` for user profile viewing and editing (name, email, phone).
+  - Added `PUT /api/auth/profile` endpoint for profile updates.
+- **Problems hit:** None.
+- **Changes made:** `backend/src/routers/auth.py`, `frontend/src/components/ProfileModal.jsx`, `frontend/src/components/Navbar.jsx`.
+- **Tests run:** Verified profile update round-trip via API and UI.
+
+### Session 9: Product Registration and Warranty Lifecycle Tracking
+- **What was built:**
+  - Product registration modal in frontend with unique `PRD-{UUID}` ID generation.
+  - Automatic warranty record creation upon product registration with configurable duration.
+  - Warranty status lifecycle tracking (Active, Expired, Grace Period).
+- **Problems hit:** None.
+- **Changes made:** `backend/src/routers/products.py`, `frontend/src/pages/Products.jsx`.
+- **Tests run:** Verified product creation, warranty auto-generation, and status display.
+
+### Session 10: Role-Based Access Control Enforcement
+- **What was built:**
+  - Applied `require_role()` guards across all API routes.
+  - Added frontend route protection via `ProtectedRoute.jsx` with role-based sidebar and navigation filtering.
+  - Scoped data visibility: customers see only their own products, warranties, and claims.
+- **Problems hit:** None.
+- **Changes made:** All routers (claims, products, warranties, admin, policies), `ProtectedRoute.jsx`, `Navbar.jsx`, `App.jsx`.
+- **Tests run:** `backend/tests/test_rbac.py` — verified access control across all 4 roles.
+
+### Session 11: Claim Form Redesign and Media Uploads
+- **What was built:**
+  - Reset claim form to empty defaults instead of pre-filled sample data.
+  - Added product autofill from catalog selection with overwrite protection and mismatch warnings.
+  - Added fault evidence, damage photo, and barcode image uploads with SHA-256 persistence and dossier preview thumbnails.
+  - Added product warranty status indicator on the claim form.
+- **Problems hit:** None.
+- **Changes made:** `frontend/src/pages/SubmitClaim.jsx`, `backend/src/routers/claims.py`.
+- **Tests run:** `backend/tests/test_task1_media_upload.py` — verified file upload, hash persistence, and retrieval.
+
+### Session 12: Product Ownership and Warranty Validation
+- **What was built:**
+  - Restricted claim submission to registered, owned products with active warranty coverage.
+  - Claims against unregistered, unowned, or expired-warranty products are rejected at submission time.
+- **Problems hit:** None.
+- **Changes made:** `backend/src/routers/claims.py`, `frontend/src/pages/SubmitClaim.jsx`.
+- **Tests run:** `backend/tests/test_task3_product_warranty_restriction.py`.
+
+### Session 13: Warranty Card Upload
+- **What was built:**
+  - Warranty card file upload endpoint with SHA-256 hash persistence.
+  - Dossier preview rendering of warranty card alongside receipt and other documents.
+- **Problems hit:** None.
+- **Changes made:** `backend/src/routers/claims.py`, `frontend/src/pages/SubmitClaim.jsx`, `frontend/src/pages/ClaimDetail.jsx`.
+- **Tests run:** `backend/tests/test_task1_warranty_card_upload.py`.
+
+### Session 14: Cross-Document Serial and Model Number Verification
+- **What was built:**
+  - `OCRService.cross_verify_all()`: comprehensive cross-check of entered serial/model vs. receipt, warranty card, and barcode/product photo OCR extractions.
+  - Inter-document comparisons (receipt vs. warranty card vs. barcode).
+  - API endpoint `/api/claims/cross-verify` and frontend integration.
+- **Problems hit:** None.
+- **Changes made:** `backend/src/services/ocr_service.py`, `backend/src/routers/claims.py`, `frontend/src/pages/SubmitClaim.jsx`.
+- **Tests run:** `backend/tests/test_task2_cross_verification.py`.
+
+---
+
+## Day 3 — 2026-09-28
+
+### Session 15: Semantic Duplicate Claim Detection
+- **What was built:**
+  - `DuplicateDetector` service with 4 detection factors: cryptographic document hash, invoice number match, semantic fault description similarity (SequenceMatcher + token Jaccard/Dice), and repeated hardware serial number.
+  - Synonym table and lightweight stemmer for fault description normalization.
+  - API endpoint `/api/claims/check-duplicate` and frontend integration.
+- **Problems hit:** None.
+- **Changes made:** `backend/src/services/duplicate_detector.py`, `backend/src/routers/claims.py`, `frontend/src/pages/SubmitClaim.jsx`.
+- **Tests run:** `backend/tests/test_task3_semantic_duplicate.py`.
+
+### Session 16: TM Model Re-Integration (Keras 3 Compatibility)
+- **What was built:**
+  - Rebuilt `TeachableMachinePredictor._reconstruct_and_load_h5()` to reconstruct the full MobileNetV2 (alpha=1.0) architecture and load weights layer-by-layer from the legacy H5 file.
+  - Added automatic native `.keras` format caching for fast subsequent boots.
+  - Added canonical label name mapping from Teachable Machine export labels to display labels.
+- **Problems hit:** Keras 3 dropped support for `model_config`-based H5 loading used by Teachable Machine exports. Solved by reconstructing the architecture programmatically and transferring weights.
+- **Changes made:** `backend/src/ml/teachable_machine.py`.
+- **Tests run:** Verified model loads correctly and produces valid predictions on demo cards.
+
+### Session 17: Bug Fixes (Issues 1–5)
+- **What was fixed:**
+  - **Issue 1:** Chronological date contradiction detection — fixed comparison logic in `generate_cards.py` and `rule_engine.py` to correctly flag claims where purchase date is after submission date.
+  - **Issue 2:** Warranty remaining days calculation — changed to calculate relative to submission date rather than current date.
+  - **Issue 3:** Borderline claim routing — updated `adjudication_engine.py` to route claims with low-confidence AI predictions (both models < 0.60) or strong model disagreement (gap > 0.40) to Manual Review instead of auto-rejection, per SRS Step 12.
+  - **Issue 4:** Vision model architecture mismatch — restored correct MobileNetV2 alpha=1.0 architecture (1280 pooled features) from backup weights to match the original Teachable Machine training configuration.
+  - **Issue 5:** Serial number duplicate detection — added Factor 4 to `DuplicateDetector` that flags any prior active claim on the same hardware serial number, regardless of fault description similarity.
+- **Problems hit:** MobileNetV2 alpha=0.35 (320 pooled features) was incorrectly used after an earlier refactor; restored to alpha=1.0 (1280 features) matching the backup weight shapes.
+- **Changes made:** `backend/dataset_generator/generate_cards.py`, `backend/src/services/rule_engine.py`, `backend/src/services/adjudication_engine.py`, `backend/src/ml/teachable_machine.py`, `backend/src/services/duplicate_detector.py`.
+- **Tests run:** Re-ran `test_e2e.py`, `test_batch3_ocr.py`, `test_task3_semantic_duplicate.py`. All passing.
+
+### Session 18: Final Amendments
+- **What was built:** Minor UI and backend polish, final cleanup before submission.
+- **Problems hit:** None.
+- **Changes made:** Various minor adjustments across routers and frontend pages.
+- **Tests run:** Full test suite re-run, all passing.
 
 ---
 

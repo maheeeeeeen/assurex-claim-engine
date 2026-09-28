@@ -1,3 +1,7 @@
+> **Historical Document:** This file is the Day 1 planning analysis created before development began.
+> It does not reflect the current state of the application. For accurate current details, see
+> [README.md](README.md), [devlog.md](devlog.md), and [AI_USAGE.md](AI_USAGE.md).
+
 # AssureX Claim Engine — Comprehensive Analysis
 
 ## 1. Project Identity at a Glance

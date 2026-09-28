@@ -1,16 +1,34 @@
-# React + Vite
+# AssureX Claim Engine — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React single-page application built with Vite, Bootstrap 5, React Router, and Recharts.
 
-Currently, two official plugins are available:
+## Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```bash
+npm install
+npm run dev
+```
 
-## React Compiler
+Runs at `http://localhost:5173`. Expects the backend API at `http://localhost:8000`.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Structure
 
-## Expanding the Oxlint configuration
+```
+src/
+├── main.jsx              # React DOM entry point
+├── App.jsx               # Router and layout
+├── index.css             # Global styles
+├── api/                  # Axios client and endpoint wrappers
+├── context/              # AuthContext (JWT, user state)
+├── pages/                # Route-level page components
+├── components/           # Reusable UI components (Navbar, ProfileModal, admin tabs)
+└── routes/               # ProtectedRoute (role-based access)
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+## Build
+
+```bash
+npm run build
+```
+
+Output is written to `dist/`.

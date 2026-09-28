@@ -15,7 +15,7 @@
 
 ## 2026-09-26 — Google Antigravity (Gemini)
 - **Purpose:** Synthetic claim dataset and Claim Summary Card image generation (Phase 1)
-- **Prompt/assistance type:** "Generate 2,500 synthetic warranty claim records with realistic anomalies and render Claim Summary Cards without predictions using Pillow"
+- **Prompt/assistance type:** "Generate synthetic warranty claim records with realistic anomalies and render Claim Summary Cards without predictions using Pillow" (initially 2,500 records; later regenerated to 10,000 in Session 7)
 - **Files/modules affected:**
   - `backend/dataset_generator/generate_claims.py`
   - `backend/dataset_generator/generate_cards.py`
@@ -24,7 +24,7 @@
   - `backend/data/card_image_mapping.csv`
   - `sample_claims/demo_cards/*`
 - **Modifications made by team:** Verified stratified split distributions (70/15/15), tuned anomaly ratios (serial mismatches, date contradictions, excluded damages), audited card layout to guarantee strict absence of model predictions/confidence scores per SRS.
-- **Testing performed:** Validated column consistency across train/val/test splits, checked Pillow rendering output, confirmed 4,250 PNG card files generated successfully with zero errors.
+- **Testing performed:** Validated column consistency across train/val/test splits, checked Pillow rendering output, confirmed card PNG files generated successfully with zero errors.
 - **Verified by:** Team Lead
 
 ## 2026-09-26 — Google Antigravity (Gemini)
@@ -43,7 +43,7 @@
   - `reports/model_comparison.md`
   - `reports/model_comparison_chart.png`
 - **Modifications made by team:** Redesigned card layout grid with full-width product row, dynamic badge widths, and high-DPI TrueType fonts. Tuned 8 classifier hyper-parameters, audited 5-fold cross-validation results, inspected confusion matrix heatmaps, verified live inference on edge-case claims.
-- **Testing performed:** Verified 4,250 high-res card renders (zero overlaps verified via image inspection). Executed 5-fold CV across 8 models, verified test F1 = 1.0000 on unseen split, verified `TabularPredictor` live inference on Valid, Invalid, and Manual Review test cases.
+- **Testing performed:** Verified high-res card renders (zero overlaps verified via image inspection). Executed 5-fold CV across 8 models, verified `TabularPredictor` live inference on Valid, Invalid, and Manual Review test cases. (Note: metrics were later updated when the dataset was regenerated to 10,000 records in Session 7.)
 - **Verified by:** Team Lead
 
 ## 2026-09-26 — Google Antigravity (Gemini)
@@ -61,6 +61,7 @@
   - `reports/model_comparison_30_claims.json`
 - **Modifications made by team:** Optimized pipeline for CPU execution using memory-cached transfer learning; built vectorized batch prediction interfaces for both tabular and vision inference engines; implemented 5-category match taxonomy for Deliverable 6.
 - **Testing performed:** Validated exported Keras model against Teachable Machine format (224x224 RGB, [-1, 1] normalization); verified 95.47% validation accuracy on 375 validation cards; executed live inference across demo cards and 35 unseen test claims; verified JSON and Markdown benchmark reports.
+
 ## 2026-09-26 — Google Antigravity (Gemini)
 - **Purpose:** Full Application Development & End-to-End Integration (Phase 4)
 - **Prompt/assistance type:** "Develop complete backend services (Rule Engine, OCR, Card Service, Adjudication Engine, RBAC Auth, REST Routers), SQLite seeding, and modern React dashboard with live claim feed, intake wizard, and full claim dossier"
@@ -92,6 +93,55 @@
   - `sample_claims/`
 - **Modifications made by team:** Connected frontend export buttons to API routes generating dynamic CSV and HTML templates. Extracted test claims for demo bundle.
 - **Testing performed:** Tested CSV and HTML download behavior in browser UI. Verified file contents.
+- **Verified by:** Team Lead
+
+## 2026-09-27 — Google Antigravity (Gemini)
+- **Purpose:** 10K dataset regeneration, 8 warranty policies, model re-training, and admin analytics dashboard
+- **Prompt/assistance type:** "Regenerate dataset to 10,000 records across 6 categories, add 5 new warranty policy files, re-train all 8 classifiers, and build admin analytics tabs"
+- **Files/modules affected:**
+  - `backend/dataset_generator/generate_claims.py`, `generate_cards.py`
+  - `backend/data/claims_*.csv`, `dataset_summary.json`, `card_image_mapping.csv`
+  - `backend/policies/*.json` (5 new policy files added)
+  - `backend/src/ml/train_models.py`
+  - `backend/model/*.joblib` (all 8 model artifacts re-serialized)
+  - `reports/model_comparison.md`, `model_comparison.json`, `model_comparison_chart.png`
+  - `frontend/src/components/admin/ClaimsAnalyticsTab.jsx`, `ModelPerformanceTab.jsx`, `OperationsTab.jsx`
+  - `frontend/src/pages/Admin.jsx`
+- **Modifications made by team:** Verified 10,000-record dataset shape and stratification. Audited 5 new policy files against SRS requirements. Reviewed re-trained model metrics. Tested admin dashboard tab rendering.
+- **Testing performed:** Verified CSV line counts (10,001 including header), confirmed 6-category class balance, re-ran 5-fold CV, verified admin tabs render correctly.
+- **Verified by:** Team Lead
+
+## 2026-09-27 — Google Antigravity (Gemini)
+- **Purpose:** Employee role, profile management, product registration, RBAC enforcement, claim form redesign, media uploads, product validation, warranty card upload, and cross-document verification
+- **Prompt/assistance type:** Multiple prompts for implementing RBAC, product registration, media uploads, ownership validation, warranty card handling, and OCR cross-verification
+- **Files/modules affected:**
+  - `backend/src/routers/auth.py` (profile GET/PUT)
+  - `backend/src/routers/products.py` (product registration)
+  - `backend/src/routers/claims.py` (media upload, warranty card upload, cross-verify, product validation)
+  - `backend/src/services/ocr_service.py` (cross_verify_all)
+  - `frontend/src/components/ProfileModal.jsx`
+  - `frontend/src/pages/Products.jsx`, `SubmitClaim.jsx`, `ClaimDetail.jsx`
+  - `frontend/src/routes/ProtectedRoute.jsx`
+  - `frontend/src/context/AuthContext.jsx`
+  - `backend/tests/test_rbac.py`, `test_task1_media_upload.py`, `test_task1_warranty_card_upload.py`, `test_task2_cross_verification.py`, `test_task3_product_warranty_restriction.py`
+- **Modifications made by team:** Reviewed RBAC guard placement on all routes, verified product ownership scoping, tested OCR cross-verification logic across receipt/warranty card/barcode, confirmed SHA-256 hash persistence.
+- **Testing performed:** Ran all new test files (`test_rbac.py`, `test_task1_media_upload.py`, `test_task1_warranty_card_upload.py`, `test_task2_cross_verification.py`, `test_task3_product_warranty_restriction.py`). All passing.
+- **Verified by:** Team Lead
+
+## 2026-09-28 — Google Antigravity (Gemini)
+- **Purpose:** Semantic duplicate claim detection, TM Keras 3 re-integration, and bug fixes (Issues 1–5)
+- **Prompt/assistance type:** Multiple prompts for duplicate detection, Keras 3 compatibility, and 5 bug fix issues
+- **Files/modules affected:**
+  - `backend/src/services/duplicate_detector.py`
+  - `backend/src/ml/teachable_machine.py` (Keras 3 architecture reconstruction, alpha=1.0 restore)
+  - `backend/src/services/adjudication_engine.py` (borderline claim routing)
+  - `backend/src/services/rule_engine.py` (date contradiction fix)
+  - `backend/dataset_generator/generate_cards.py` (date flag fix)
+  - `backend/src/routers/claims.py` (duplicate check endpoint)
+  - `frontend/src/pages/SubmitClaim.jsx` (duplicate check UI)
+  - `backend/tests/test_task3_semantic_duplicate.py`, `test_batch3_ocr.py`
+- **Modifications made by team:** Reviewed 4-factor duplicate detection logic, verified Keras 3 weight transfer from H5, confirmed borderline routing thresholds match SRS Step 12, tested all 5 bug fix patches.
+- **Testing performed:** Ran `test_task3_semantic_duplicate.py`, `test_batch3_ocr.py`, `test_e2e.py`. All passing. Verified TM model loads and predicts correctly on demo cards.
 - **Verified by:** Team Lead
 
 ---
