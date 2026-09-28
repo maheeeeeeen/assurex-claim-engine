@@ -397,8 +397,8 @@ def submit_claim(
         fault_dt = datetime.strptime(claim_in.fault_date[:10], "%Y-%m-%d").date()
 
         has_date_contradiction = (purchase_dt > fault_dt) or (today < fault_dt)
-        product_age_months = round((fault_dt - purchase_dt).days / 30.44, 1)
-        remaining_days = float((warranty_end_dt - fault_dt).days)
+        product_age_months = max(0.0, round((fault_dt - purchase_dt).days / 30.44, 1))
+        remaining_days = float((warranty_end_dt - today).days)
     except Exception:
         has_date_contradiction = False
         product_age_months = 6.0
