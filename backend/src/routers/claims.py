@@ -396,9 +396,11 @@ def submit_claim(
         warranty_end_dt = datetime.strptime(claim_in.warranty_end[:10], "%Y-%m-%d").date()
         fault_dt = datetime.strptime(claim_in.fault_date[:10], "%Y-%m-%d").date()
 
+        has_date_contradiction = (purchase_dt > fault_dt) or (today < fault_dt)
         product_age_months = round((fault_dt - purchase_dt).days / 30.44, 1)
         remaining_days = float((warranty_end_dt - fault_dt).days)
     except Exception:
+        has_date_contradiction = False
         product_age_months = 6.0
         remaining_days = 120.0
 
@@ -486,7 +488,7 @@ def submit_claim(
         "repair_report_uploaded": claim_in.repair_report_uploaded,
         "missing_doc_count": missing_docs,
         "serial_mismatch_flag": has_serial_mismatch,
-        "date_contradiction_flag": False,
+        "date_contradiction_flag": has_date_contradiction,
         "excluded_damage": False,
         "duplicate_claim_flag": is_duplicate_claim,
         "duplicate_claim_details": duplicate_claim_details,
@@ -551,6 +553,7 @@ def submit_claim(
         missing_doc_count=missing_docs,
         card_image_path=card_image_rel_path,
         serial_mismatch_flag=has_serial_mismatch,
+        date_contradiction_flag=has_date_contradiction,
         duplicate_claim_flag=is_duplicate_claim,
         duplicate_claim_details=duplicate_claim_details,
         invoice_number=claim_in.invoice_number,

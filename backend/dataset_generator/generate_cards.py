@@ -325,6 +325,14 @@ def render_claim_card(claim, variant=0, width=1200, height=1680):
 
     sn_mismatch = bool(claim.get("serial_mismatch_flag", False))
     date_contradiction = bool(claim.get("date_contradiction_flag", False))
+    if not date_contradiction:
+        try:
+            p_dt = str(claim.get("purchase_date", ""))[:10]
+            f_dt = str(claim.get("fault_date", ""))[:10]
+            if p_dt and f_dt and p_dt > f_dt:
+                date_contradiction = True
+        except Exception:
+            pass
     excluded = bool(claim.get("excluded_damage", False))
     duplicate = bool(claim.get("duplicate_claim_flag", False))
 
