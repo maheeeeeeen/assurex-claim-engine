@@ -28,6 +28,8 @@ export default function AppNavbar() {
         return 'warning';
       case 'employee':
         return 'info';
+      case 'viewer':
+        return 'secondary';
       case 'customer':
       default:
         return 'primary';
@@ -123,6 +125,21 @@ export default function AppNavbar() {
                       </Nav.Link>
                       <Nav.Link as={NavLink} to="/review-queue">
                         <FaTasks className="me-1 mb-1 text-warning" /> Review Queue
+                      </Nav.Link>
+                    </>
+                  )}
+
+                  {/* VIEWER LINKS */}
+                  {role === 'viewer' && (
+                    <>
+                      <Nav.Link as={NavLink} to="/claims">
+                        <FaListAlt className="me-1 mb-1" /> Claims (Read-Only)
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/products">
+                        <FaBox className="me-1 mb-1" /> Products (Read-Only)
+                      </Nav.Link>
+                      <Nav.Link as={NavLink} to="/warranties">
+                        <FaFileContract className="me-1 mb-1" /> Warranties (Read-Only)
                       </Nav.Link>
                     </>
                   )}

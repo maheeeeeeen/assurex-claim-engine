@@ -61,6 +61,15 @@ class ClaimSubmitRequest(BaseModel):
     cross_verification_json: Optional[str] = None
 
 
+class ClaimUpdateRequest(BaseModel):
+    fault_date: Optional[str] = None
+    fault_type: Optional[str] = None
+    fault_description: Optional[str] = None
+    damage_type: Optional[str] = None
+    repair_history_count: Optional[int] = None
+    previous_repair_authorized: Optional[bool] = None
+
+
 class MediaUploadResponse(BaseModel):
     media_type: str
     filename: str

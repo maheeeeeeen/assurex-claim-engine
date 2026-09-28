@@ -37,7 +37,8 @@ import {
   FaCertificate,
   FaFilePdf,
   FaDownload,
-  FaExchangeAlt
+  FaExchangeAlt,
+  FaTrash
 } from 'react-icons/fa';
 
 export default function ClaimDetail() {
@@ -115,6 +116,19 @@ export default function ClaimDetail() {
     }
   };
 
+  const handleDeleteClaim = async () => {
+    if (!window.confirm(`Are you sure you want to permanently delete claim ${id}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await claimsAPI.deleteClaim(id);
+      navigate('/claims');
+    } catch (err) {
+      console.error('Failed to delete claim:', err);
+      setError(err.response?.data?.detail || 'Failed to delete claim.');
+    }
+  };
+
   if (loading) {
     return (
       <Container className="py-5 text-center">
@@ -141,6 +155,10 @@ export default function ClaimDetail() {
   const { claim, audit_logs, rule_evaluation, decision_reasons, tabular_probabilities, tm_probabilities } = dossier;
   const crossVerification = dossier.cross_verification || (claim.cross_verification_json ? JSON.parse(claim.cross_verification_json) : null);
   const isReviewerOrAdmin = user?.role === 'reviewer' || user?.role === 'admin';
+  const canDeleteClaim = user?.role !== 'viewer' && (
+    user?.role === 'admin' || 
+    (user?.role === 'customer' && !['Auto-Approved', 'Approved', 'Auto-Rejected', 'Rejected'].includes(claim.adjudication_status))
+  );
 
   // Format image & media URLs
   const resolveMediaUrl = (path) => {
@@ -201,6 +219,16 @@ export default function ClaimDetail() {
               className="d-flex align-items-center gap-1"
             >
               <FaDownload /> Export Dossier
+            </Button>
+          )}
+          {canDeleteClaim && (
+            <Button 
+              variant="outline-danger" 
+              size="sm"
+              onClick={handleDeleteClaim}
+              className="d-flex align-items-center gap-1"
+            >
+              <FaTrash /> Delete Claim
             </Button>
           )}
           <div className="text-end d-none d-md-block">

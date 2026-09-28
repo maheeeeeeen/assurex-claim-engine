@@ -4,14 +4,18 @@
  * Demo Data Seeding, and Autonomous Decision Threshold Controls.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Row, Col, Card, Button, Form, Spinner, Badge } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+import { notificationsAPI } from '../../api';
 import { 
   FaDatabase, 
   FaBrain, 
   FaSlidersH, 
   FaCheckCircle, 
-  FaRedoAlt 
+  FaRedoAlt,
+  FaBell,
+  FaSyncAlt
 } from 'react-icons/fa';
 
 export default function OperationsTab({
@@ -23,6 +27,24 @@ export default function OperationsTab({
   savingThresholds,
   seeding
 }) {
+  const [adminNotifs, setAdminNotifs] = useState([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+
+  const fetchAdminNotifs = async () => {
+    try {
+      setLoadingNotifs(true);
+      const res = await notificationsAPI.getNotifications();
+      setAdminNotifs(res.data || []);
+    } catch (err) {
+      console.error('Failed to fetch admin notifications:', err);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAdminNotifs();
+  }, []);
   return (
     <Row className="g-4">
       {/* System Health & Diagnostics */}
@@ -192,6 +214,88 @@ export default function OperationsTab({
                 {savingThresholds ? 'Saving Configuration...' : 'Save AI Decision Thresholds'}
               </Button>
             </Form>
+          </Card.Body>
+        </Card>
+      </Col>
+          {/* Centralized Admin Activity & Event Notifications Feed */}
+      <Col xs={12} className="mt-2">
+        <Card>
+          <Card.Header className="d-flex justify-content-between align-items-center">
+            <span className="fw-bold d-flex align-items-center gap-2">
+              <FaBell className="text-warning" /> Centralized Admin Event Notifications & Audit Feed
+            </span>
+            <div className="d-flex align-items-center gap-2">
+              <Button
+                variant="outline-secondary"
+                size="sm"
+                onClick={fetchAdminNotifs}
+                disabled={loadingNotifs}
+                className="d-flex align-items-center gap-1"
+              >
+                <FaSyncAlt className={loadingNotifs ? 'fa-spin' : ''} size={11} /> Refresh Events
+              </Button>
+            </div>
+          </Card.Header>
+          <Card.Body className="p-0">
+            {loadingNotifs && adminNotifs.length === 0 ? (
+              <div className="p-4 text-center text-muted">
+                <Spinner animation="border" size="sm" className="me-2" /> Loading admin notifications...
+              </div>
+            ) : adminNotifs.length === 0 ? (
+              <div className="p-4 text-center text-muted">
+                No recent admin activity notifications recorded yet.
+              </div>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-dark-custom mb-0 align-middle">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '180px' }}>Event Type</th>
+                      <th>Description & Details</th>
+                      <th style={{ width: '180px' }}>Timestamp</th>
+                      <th style={{ width: '100px' }} className="text-end">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminNotifs.slice(0, 30).map((n) => (
+                      <tr key={n.id}>
+                        <td>
+                          <Badge
+                            bg={
+                              n.type.includes('delete')
+                                ? 'danger'
+                                : n.type.includes('update')
+                                ? 'warning'
+                                : n.type.includes('submit') || n.type.includes('register')
+                                ? 'success'
+                                : 'info'
+                            }
+                            className="font-mono text-uppercase px-2 py-1"
+                            style={{ fontSize: '0.72rem' }}
+                          >
+                            {n.type}
+                          </Badge>
+                        </td>
+                        <td>
+                          <div className="fw-semibold text-white">{n.title}</div>
+                          <div className="text-muted small">{n.message}</div>
+                        </td>
+                        <td className="text-muted font-mono small">
+                          {n.created_at ? new Date(n.created_at.includes('Z') ? n.created_at : `${n.created_at}Z`).toLocaleString() : 'Recent'}
+                        </td>
+                        <td className="text-end">
+                          {n.link && (
+                            <Link to={n.link} className="btn btn-outline-primary btn-sm py-0 px-2" style={{ fontSize: '0.75rem' }}>
+                              View
+                            </Link>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Card.Body>
         </Card>
       </Col>

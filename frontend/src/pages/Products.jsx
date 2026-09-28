@@ -21,6 +21,7 @@ import {
 } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { productsAPI, warrantiesAPI } from '../api';
+import { useAuth } from '../context/AuthContext';
 import { 
   FaBox, 
   FaSearch, 
@@ -31,11 +32,13 @@ import {
   FaExclamationTriangle, 
   FaCheckCircle, 
   FaTimesCircle,
-  FaTag
+  FaTag,
+  FaTrash
 } from 'react-icons/fa';
 
 export default function Products() {
   const navigate = useNavigate();
+  const { role, user } = useAuth();
 
   // Tab state: 'products' | 'warranties'
   const [activeTab, setActiveTab] = useState('products');
@@ -169,6 +172,18 @@ export default function Products() {
     }
   };
 
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm(`Are you sure you want to delete product '${productId}'? This will also remove its associated warranty.`)) {
+      return;
+    }
+    try {
+      await productsAPI.deleteProduct(productId);
+      setProducts((prev) => prev.filter((p) => p.product_id !== productId));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete product.');
+    }
+  };
+
   // Filter products by search
   const filteredProducts = products.filter((p) => {
     const q = productSearch.toLowerCase();
@@ -234,16 +249,18 @@ export default function Products() {
           </p>
         </div>
 
-        <div className="d-flex align-items-center gap-2 flex-wrap">
-          <Button 
-            variant="primary" 
-            className="d-flex align-items-center gap-2 shadow-sm"
-            onClick={() => setShowRegModal(true)}
-          >
-            <FaPlusCircle />
-            <span>Register New Product</span>
-          </Button>
-        </div>
+        {role !== 'viewer' && (
+          <div className="d-flex align-items-center gap-2 flex-wrap">
+            <Button 
+              variant="primary" 
+              className="d-flex align-items-center gap-2 shadow-sm"
+              onClick={() => setShowRegModal(true)}
+            >
+              <FaPlusCircle />
+              <span>Register New Product</span>
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Tab Navigation */}
@@ -352,14 +369,34 @@ export default function Products() {
                           </Badge>
                         </td>
                         <td className="text-end">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => navigate('/claims/submit')}
-                            className="py-1 px-3 d-inline-flex align-items-center gap-1"
-                          >
-                            <FaShieldAlt size={12} /> File Claim
-                          </Button>
+                          <div className="d-inline-flex align-items-center gap-1">
+                            {role !== 'viewer' && (
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => navigate('/claims/submit')}
+                                className="py-1 px-3 d-inline-flex align-items-center gap-1"
+                              >
+                                <FaShieldAlt size={12} /> File Claim
+                              </Button>
+                            )}
+                            {(role === 'admin' || (role === 'customer' && p.user_id === user?.id)) && (
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() => handleDeleteProduct(p.product_id)}
+                                className="py-1 px-2 d-inline-flex align-items-center"
+                                title="Delete product asset"
+                              >
+                                <FaTrash size={11} />
+                              </Button>
+                            )}
+                            {role === 'viewer' && (
+                              <span className="badge bg-secondary bg-opacity-50 text-light px-2 py-1">
+                                Read-Only
+                              </span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))

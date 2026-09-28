@@ -39,6 +39,12 @@ export const claimsAPI = {
   adjudicateClaim: (claimId, payload) =>
     api.post(`/api/claims/${claimId}/adjudicate`, payload),
     
+  // Update claim
+  updateClaim: (claimId, data) => api.put(`/api/claims/${claimId}`, data),
+
+  // Delete claim
+  deleteClaim: (claimId) => api.delete(`/api/claims/${claimId}`),
+
   // Export CSV
   exportCSV: (params = {}) => api.get('/api/claims/export/csv', { params, responseType: 'blob' }),
   

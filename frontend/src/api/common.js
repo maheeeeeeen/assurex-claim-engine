@@ -8,6 +8,8 @@ export const productsAPI = {
   getProducts: (params = {}) => api.get('/api/products/', { params }),
   getProduct: (id) => api.get(`/api/products/${id}`),
   createProduct: (data) => api.post('/api/products/', data),
+  updateProduct: (id, data) => api.put(`/api/products/${id}`, data),
+  deleteProduct: (id) => api.delete(`/api/products/${id}`),
 };
 
 export const warrantiesAPI = {
@@ -28,9 +30,16 @@ export const adminAPI = {
   getAnalytics: () => api.get('/api/admin/analytics'),
 };
 
+export const notificationsAPI = {
+  getNotifications: () => api.get('/api/notifications'),
+  markAsRead: (id) => api.put(`/api/notifications/${id}/read`),
+  markAllAsRead: () => api.post('/api/notifications/mark-all-read'),
+};
+
 export default {
   products: productsAPI,
   warranties: warrantiesAPI,
   policies: policiesAPI,
   admin: adminAPI,
+  notifications: notificationsAPI,
 };

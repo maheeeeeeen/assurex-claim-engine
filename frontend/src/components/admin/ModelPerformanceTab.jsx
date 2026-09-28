@@ -378,18 +378,18 @@ export default function ModelPerformanceTab({ data, loading, onRefresh }) {
         </Card.Header>
         <Card.Body className="p-0">
           <div className="table-responsive">
-            <Table hover className="align-middle mb-0 custom-table">
-              <thead className="bg-surface text-muted small text-uppercase font-mono">
+            <Table hover className="table-dark-custom align-middle mb-0">
+              <thead className="bg-surface small text-uppercase font-mono">
                 <tr>
-                  <th className="ps-4">Rank</th>
-                  <th>Model Name</th>
-                  <th className="text-center">Test Accuracy</th>
-                  <th className="text-center">Weighted F1</th>
-                  <th className="text-center">Manual Rev F1</th>
-                  <th className="text-center">5-Fold CV F1</th>
-                  <th className="text-center">Inference Latency</th>
-                  <th className="text-center">Train Time</th>
-                  <th className="pe-4">Tuned Hyperparameters</th>
+                  <th className="ps-4 text-light">Rank</th>
+                  <th className="text-light">Model Name</th>
+                  <th className="text-center text-light">Test Accuracy</th>
+                  <th className="text-center text-light">Weighted F1</th>
+                  <th className="text-center text-light">Manual Rev F1</th>
+                  <th className="text-center text-light">5-Fold CV F1</th>
+                  <th className="text-center text-light">Inference Latency</th>
+                  <th className="text-center text-light">Train Time</th>
+                  <th className="pe-4 text-light">Tuned Hyperparameters</th>
                 </tr>
               </thead>
               <tbody className="small">
@@ -431,8 +431,32 @@ export default function ModelPerformanceTab({ data, loading, onRefresh }) {
                       <td className="text-center font-mono text-muted">
                         {m.Training_sec.toFixed(1)} s
                       </td>
-                      <td className="pe-4 font-mono text-cyan" style={{ fontSize: '0.72rem' }}>
-                        <code>{JSON.stringify(hp)}</code>
+                      <td className="pe-4">
+                        <div className="d-flex flex-wrap gap-1 align-items-center">
+                          {hp && typeof hp === 'object' && Object.keys(hp).length > 0 ? (
+                            Object.entries(hp).map(([param, val]) => (
+                              <span
+                                key={param}
+                                className="badge font-mono"
+                                style={{
+                                  backgroundColor: 'rgba(56, 189, 248, 0.08)',
+                                  border: '1px solid rgba(56, 189, 248, 0.25)',
+                                  color: '#f8fafc',
+                                  fontSize: '0.68rem',
+                                  fontWeight: 500,
+                                  padding: '0.22rem 0.45rem',
+                                  borderRadius: '4px',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                <span style={{ color: '#94a3b8' }}>{param}:</span>{' '}
+                                <span style={{ color: '#38bdf8', fontWeight: 600 }}>{String(val)}</span>
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-muted font-mono" style={{ fontSize: '0.72rem' }}>—</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );

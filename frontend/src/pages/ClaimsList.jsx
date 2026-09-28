@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form, Button, Table, Spinner, InputGroup } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { claimsAPI } from '../api';
 import { 
   FaSearch, 
@@ -15,11 +16,13 @@ import {
   FaEye, 
   FaPlusCircle, 
   FaUndo,
-  FaFileCsv
+  FaFileCsv,
+  FaTrash
 } from 'react-icons/fa';
 
 export default function ClaimsList() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [claims, setClaims] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +90,29 @@ export default function ClaimsList() {
     }
   };
 
+  const handleDeleteClaim = async (claimId) => {
+    if (!window.confirm(`Are you sure you want to delete claim ${claimId}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await claimsAPI.deleteClaim(claimId);
+      await fetchClaims();
+    } catch (err) {
+      console.error('Failed to delete claim:', err);
+      alert(err.response?.data?.detail || 'Failed to delete claim.');
+    }
+  };
+
+  const canDeleteClaim = (c) => {
+    if (user?.role === 'viewer') return false;
+    if (user?.role === 'admin') return true;
+    if (user?.role === 'customer') {
+      const isFinalized = ['Auto-Approved', 'Approved', 'Auto-Rejected', 'Rejected'].includes(c.adjudication_status);
+      return !isFinalized;
+    }
+    return false;
+  };
+
   return (
     <Container fluid className="px-4 py-4">
       {/* Title & Action Bar */}
@@ -105,13 +131,15 @@ export default function ClaimsList() {
           >
             <FaFileCsv /> Export CSV
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={() => navigate('/claims/submit')}
-            className="d-flex align-items-center gap-2"
-          >
-            <FaPlusCircle /> Submit Claim
-          </Button>
+          {user?.role !== 'viewer' && (
+            <Button 
+              variant="primary" 
+              onClick={() => navigate('/claims/submit')}
+              className="d-flex align-items-center gap-2"
+            >
+              <FaPlusCircle /> Submit Claim
+            </Button>
+          )}
         </div>
       </div>
 
@@ -274,14 +302,27 @@ export default function ClaimsList() {
                       </span>
                     </td>
                     <td className="text-end">
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        onClick={() => navigate(`/claims/${c.claim_id}`)}
-                        className="py-1 px-3 d-inline-flex align-items-center gap-1"
-                      >
-                        <FaEye size={12} /> Dossier
-                      </Button>
+                      <div className="d-inline-flex align-items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => navigate(`/claims/${c.claim_id}`)}
+                          className="py-1 px-3 d-inline-flex align-items-center gap-1"
+                        >
+                          <FaEye size={12} /> Dossier
+                        </Button>
+                        {canDeleteClaim(c) && (
+                          <Button
+                            size="sm"
+                            variant="outline-danger"
+                            onClick={() => handleDeleteClaim(c.claim_id)}
+                            title="Delete Claim"
+                            className="py-1 px-2 d-inline-flex align-items-center"
+                          >
+                            <FaTrash size={12} />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

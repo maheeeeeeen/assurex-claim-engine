@@ -74,6 +74,7 @@ def seed_demo_data(
         ("admin", "admin@assurex.com", "Admin@12345", "admin", "Chief Administrator"),
         ("adjuster_sarah", "sarah@assurex.com", "Adjuster@12345", "reviewer", "Sarah Jenkins (Lead Adjuster)"),
         ("customer_mike", "mike@example.com", "Customer@12345", "customer", "Michael Vance (Customer)"),
+        ("viewer_guest", "viewer@assurex.com", "Viewer@12345", "viewer", "Guest Viewer"),
     ]
 
     for uname, email, pwd, role, fname in default_users:

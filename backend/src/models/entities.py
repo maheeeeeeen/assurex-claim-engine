@@ -22,7 +22,7 @@ class User(SQLModel, table=True):
     username: str = Field(unique=True, index=True)
     email: str = Field(unique=True, index=True)
     hashed_password: str
-    role: str = Field(default="customer", index=True)  # customer, employee, reviewer, admin
+    role: str = Field(default="customer", index=True)  # customer, employee, reviewer, admin, viewer
     full_name: str
     phone: Optional[str] = Field(default=None)
     created_at: str = Field(default_factory=lambda: datetime.utcnow().isoformat())

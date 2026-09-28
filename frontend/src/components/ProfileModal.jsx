@@ -125,6 +125,8 @@ export default function ProfileModal({ show, onHide }) {
         return 'warning';
       case 'employee':
         return 'info';
+      case 'viewer':
+        return 'secondary';
       case 'customer':
       default:
         return 'primary';

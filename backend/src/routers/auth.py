@@ -37,7 +37,7 @@ def register(user_in: UserRegister, session: Session = Depends(get_session)):
             detail="Email address already registered",
         )
 
-    valid_roles = ["customer", "employee", "reviewer", "admin"]
+    valid_roles = ["customer", "employee", "reviewer", "admin", "viewer"]
     role = user_in.role if user_in.role in valid_roles else "customer"
 
     # Generate unique user code

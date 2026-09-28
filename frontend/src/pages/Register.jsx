@@ -123,6 +123,7 @@ export default function Register() {
                     <option value="employee">Employee (Company Staff)</option>
                     <option value="reviewer">Claim Reviewer / Adjuster</option>
                     <option value="admin">Administrator</option>
+                    <option value="viewer">Viewer (Read-Only Auditor / Observer)</option>
                   </Form.Select>
                 </Form.Group>
 

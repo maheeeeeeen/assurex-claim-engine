@@ -12,7 +12,7 @@ class UserRegister(BaseModel):
     password: str
     full_name: str
     phone: Optional[str] = None
-    role: Optional[str] = "customer"  # customer, employee, reviewer, admin
+    role: Optional[str] = "customer"  # customer, employee, reviewer, admin, viewer
 
 
 class UserLogin(BaseModel):

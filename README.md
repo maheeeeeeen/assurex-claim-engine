@@ -13,7 +13,7 @@ The AssureX Claim Engine is a full-stack web application that automates warranty
 - **Backend:** FastAPI + Uvicorn (JSON API)
 - **Frontend:** React (Vite) + Bootstrap 5 + React Router
 - **Database:** SQLite via SQLModel ORM
-- **Auth:** JWT (python-jose + passlib bcrypt), role-based access (customer, employee, reviewer, admin)
+- **Auth:** JWT (python-jose + passlib bcrypt), role-based access (customer, employee, reviewer, admin, viewer)
 - **ML (tabular):** scikit-learn, XGBoost, LightGBM — 8 models trained and compared
 - **ML (image):** Google Teachable Machine (MobileNetV2, Keras H5 export)
 - **OCR:** pytesseract (Tesseract) with heuristic fallback when Tesseract is unavailable
@@ -114,6 +114,7 @@ These accounts are created automatically by the seed script on first startup:
 | Admin | `admin` | admin@assurex.com | `Admin@12345` |
 | Reviewer | `adjuster_sarah` | sarah@assurex.com | `Adjuster@12345` |
 | Customer | `customer_mike` | mike@example.com | `Customer@12345` |
+| Viewer | `viewer_guest` | viewer@assurex.com | `Viewer@12345` |
 
 ## Dataset
 

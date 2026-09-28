@@ -31,10 +31,14 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
 
-              {/* Protected routes — customer, employee, admin only (Reviewer blocked from submission & product registration) */}
+              {/* Protected routes — customer, employee, admin only (Reviewer & Viewer blocked from submission) */}
               <Route element={<ProtectedRoute allowedRoles={['customer', 'employee', 'admin']} />}>
                 <Route path="/claims/submit" element={<SubmitClaim />} />
                 <Route path="/claims/new" element={<SubmitClaim />} />
+              </Route>
+
+              {/* Protected routes — customer, employee, admin, viewer */}
+              <Route element={<ProtectedRoute allowedRoles={['customer', 'employee', 'admin', 'viewer']} />}>
                 <Route path="/products" element={<Products />} />
                 <Route path="/warranties" element={<Products />} />
               </Route>

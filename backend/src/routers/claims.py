@@ -23,8 +23,10 @@ from sqlmodel import Session, select, func
 from src.database_setup import get_session
 from src.models import Claim, ClaimAuditLog, User, Product, Warranty, Notification
 from src.auth.service import get_current_user, require_role
+from src.services.notification_service import notify_admins
 from src.schemas.claims import (
     ClaimSubmitRequest, 
+    ClaimUpdateRequest,
     ClaimAdjudicationAction, 
     ClaimResponse, 
     ClaimStatsResponse,
@@ -655,6 +657,19 @@ def submit_claim(
             link="/claims"
         )
         session.add(notif)
+
+    # Centralized Admin Notification
+    try:
+        notify_admins(
+            session=session,
+            event_type="claim_submitted",
+            identifier=claim_id,
+            actor_username=current_user.username,
+            description=f"Claim submitted for product '{claim_in.product_name}' (SN: {claim_in.serial_number_entered}). Initial Status: {eval_result['adjudication_status']}.",
+            link=f"/claims/{claim_id}"
+        )
+    except Exception as e:
+        print(f"[Warning] Failed to dispatch admin notification: {e}")
         
     session.commit()
     session.refresh(db_claim)
@@ -987,6 +1002,19 @@ def adjudicate_claim_manual(
             link="/claims"
         )
         session.add(notif)
+
+    # Centralized Admin Notification
+    try:
+        notify_admins(
+            session=session,
+            event_type="claim_updated",
+            identifier=claim_id,
+            actor_username=current_user.username,
+            description=f"Claim status updated to '{new_status}' by {current_user.username}.",
+            link=f"/claims/{claim_id}"
+        )
+    except Exception as e:
+        print(f"[Warning] Failed to dispatch admin notification: {e}")
         
     session.commit()
     session.refresh(claim)
@@ -995,3 +1023,134 @@ def adjudicate_claim_manual(
         "message": f"Claim {claim_id} updated to {new_status}",
         "claim": claim,
     }
+
+
+@router.put("/{claim_id}")
+def update_claim(
+    claim_id: str,
+    claim_update: ClaimUpdateRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["customer", "admin"]))
+):
+    """
+    Updates editable claim details.
+    Enforces ownership for customers and prevents modification of finalized claims.
+    Dispatches admin notification on success.
+    """
+    claim = session.exec(select(Claim).where(Claim.claim_id == claim_id)).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    # RBAC ownership check for customer
+    if current_user.role == "customer":
+        if claim.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You do not have permission to modify this claim."
+            )
+        # Prevent customer modifying finalized claims
+        if claim.adjudication_status in ["Auto-Approved", "Approved", "Auto-Rejected", "Rejected"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Claims with status '{claim.adjudication_status}' cannot be modified once finalized."
+            )
+
+    # Apply updates
+    if claim_update.fault_date is not None:
+        claim.fault_date = claim_update.fault_date.strip()
+    if claim_update.fault_type is not None:
+        claim.fault_type = claim_update.fault_type.strip()
+    if claim_update.fault_description is not None:
+        claim.fault_description = claim_update.fault_description.strip()
+    if claim_update.damage_type is not None:
+        claim.damage_type = claim_update.damage_type.strip()
+    if claim_update.repair_history_count is not None:
+        claim.repair_history_count = claim_update.repair_history_count
+    if claim_update.previous_repair_authorized is not None:
+        claim.previous_repair_authorized = claim_update.previous_repair_authorized
+
+    session.add(claim)
+
+    # Audit log
+    audit = ClaimAuditLog(
+        claim_id=claim_id,
+        actor=current_user.username,
+        action="CLAIM_UPDATED",
+        details=f"Claim details updated by {current_user.username} ({current_user.role})."
+    )
+    session.add(audit)
+
+    # Centralized Admin Notification
+    try:
+        notify_admins(
+            session=session,
+            event_type="claim_updated",
+            identifier=claim_id,
+            actor_username=current_user.username,
+            description=f"Claim '{claim_id}' for '{claim.product_name}' was updated by {current_user.username}.",
+            link=f"/claims/{claim_id}"
+        )
+    except Exception as e:
+        print(f"[Warning] Failed to dispatch admin notification: {e}")
+
+    session.commit()
+    session.refresh(claim)
+    return {"message": "Claim updated successfully", "claim": claim.model_dump(), "claim_id": claim.claim_id}
+
+
+@router.delete("/{claim_id}")
+def delete_claim(
+    claim_id: str,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["customer", "admin"]))
+):
+    """
+    Deletes a claim subject to lifecycle and policy rules.
+    - Customers can only delete their own claims when in pending or review status.
+    - Finalized claims (Approved / Rejected) cannot be deleted by customers.
+    - Admins can manage and delete claims according to administrative permissions.
+    - Viewers and Reviewers are blocked (403 Forbidden).
+    - Dispatches an admin notification upon deletion.
+    """
+    claim = session.exec(select(Claim).where(Claim.claim_id == claim_id)).first()
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    # Ownership and lifecycle check for customer
+    if current_user.role == "customer":
+        if claim.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Forbidden: You do not have permission to delete this claim."
+            )
+        FINAL_STATUSES = ["Auto-Approved", "Approved", "Auto-Rejected", "Rejected"]
+        if claim.adjudication_status in FINAL_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Claims with status '{claim.adjudication_status}' cannot be deleted under the warranty claim lifecycle policy. Only pending or in-review claims may be deleted by customers."
+            )
+
+    product_name = claim.product_name
+
+    # Remove attached audit logs
+    audit_logs = session.exec(select(ClaimAuditLog).where(ClaimAuditLog.claim_id == claim_id)).all()
+    for log in audit_logs:
+        session.delete(log)
+
+    session.delete(claim)
+
+    # Centralized Admin Notification
+    try:
+        notify_admins(
+            session=session,
+            event_type="claim_deleted",
+            identifier=claim_id,
+            actor_username=current_user.username,
+            description=f"Claim '{claim_id}' for '{product_name}' was deleted by {current_user.username} ({current_user.role}).",
+            link="/claims"
+        )
+    except Exception as e:
+        print(f"[Warning] Failed to dispatch admin notification: {e}")
+
+    session.commit()
+    return {"status": "success", "message": f"Claim '{claim_id}' deleted successfully", "claim_id": claim_id}
