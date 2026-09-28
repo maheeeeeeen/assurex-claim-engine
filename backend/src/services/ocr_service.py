@@ -128,6 +128,7 @@ class OCRService:
             return (
                 "OFFICIAL SALES RECEIPT\n"
                 "Store: Authorized Retailer\n"
+                "Invoice No: INV-2025-9021\n"
                 "Date: 2025-01-15\n"
                 "Item: Electronics Hardware Asset\n"
                 "Model: SM-X710\n"
@@ -172,7 +173,11 @@ class OCRService:
         detected_models = [m.strip().upper() for m in dict.fromkeys(mod_matches)]  # deduplicate preserving order
         found_model = detected_models[0] if detected_models else None
 
-        # 5. Total Amount
+        # 5. Invoice / Receipt Number
+        inv_match = re.search(r"(?:INVOICE\s*(?:NUMBER|NO|#)?|INV\s*(?:NUMBER|NO|#)?|RECEIPT\s*(?:NUMBER|NO|#))[:\s#-]*([A-Z0-9-]{4,25})", text, re.IGNORECASE)
+        found_invoice = inv_match.group(1).strip().upper() if inv_match else None
+
+        # 6. Total Amount
         amount_match = re.search(r"\$\s*([0-9]+(?:\.[0-9]{2})?)", text)
         found_amount = float(amount_match.group(1)) if amount_match else None
 
@@ -186,6 +191,7 @@ class OCRService:
             "detected_serials": detected_serials,
             "model_number": found_model,
             "detected_models": detected_models,
+            "invoice_number": found_invoice,
             "purchase_amount": found_amount,
             "ocr_confidence": confidence,
             "is_valid_receipt": bool(found_date or found_amount or found_sn or found_model),

@@ -404,6 +404,11 @@ export default function ClaimDetail() {
                               SHA-256: {claim.receipt_hash}
                             </div>
                           )}
+                          {claim.invoice_number && (
+                            <div className="text-truncate text-white font-mono mt-1" style={{ fontSize: '0.70rem' }}>
+                              Invoice #: <strong>{claim.invoice_number}</strong>
+                            </div>
+                          )}
                           <div className="d-flex align-items-center gap-3 mt-1">
                             <Button 
                               variant="link" 
@@ -783,24 +788,32 @@ export default function ClaimDetail() {
                 </div>
 
                 {/* 7. Duplicate Claim Check */}
-                <div className="list-group-item bg-transparent border-subtle px-0 py-2 d-flex justify-content-between align-items-center">
-                  <div>
-                    <div className="text-light small fw-semibold">Duplicate Submission Verification</div>
-                    <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                      Cross-checked against claim database
+                <div className="list-group-item bg-transparent border-subtle px-0 py-2">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <div>
+                      <div className="text-light small fw-semibold">Duplicate Submission Verification</div>
+                      <div className="text-muted" style={{ fontSize: '0.75rem' }}>
+                        Semantic fault & cryptographic hash cross-check against prior claims
+                      </div>
+                    </div>
+                    <div>
+                      {!claim.duplicate_claim_flag ? (
+                        <span className="text-success small fw-bold d-flex align-items-center gap-1">
+                          <FaCheckCircle /> Unique Claim
+                        </span>
+                      ) : (
+                        <span className="text-danger small fw-bold d-flex align-items-center gap-1">
+                          <FaTimesCircle /> Duplicate Detected
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div>
-                    {!claim.duplicate_claim_flag ? (
-                      <span className="text-success small fw-bold d-flex align-items-center gap-1">
-                        <FaCheckCircle /> Unique Claim
-                      </span>
-                    ) : (
-                      <span className="text-danger small fw-bold d-flex align-items-center gap-1">
-                        <FaTimesCircle /> Duplicate Detected
-                      </span>
-                    )}
-                  </div>
+                  {claim.duplicate_claim_flag && claim.duplicate_claim_details && (
+                    <div className="mt-2 p-2 rounded bg-danger bg-opacity-10 border border-danger border-opacity-25 text-danger small" style={{ fontSize: '0.74rem' }}>
+                      <FaExclamationTriangle className="me-1" />
+                      <strong>Flag Details:</strong> {claim.duplicate_claim_details}
+                    </div>
+                  )}
                 </div>
               </div>
             </Card.Body>

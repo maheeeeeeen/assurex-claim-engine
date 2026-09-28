@@ -213,7 +213,11 @@ class RuleEngine:
         # Rule 6: Duplicate Claim Detection
         # -------------------------------------------------------------
         if bool(claim_data.get("duplicate_claim_flag", False)):
-            hard_failures.append("Fraud prevention flag: An identical claim was recently filed for this serial number.")
+            dup_details = claim_data.get("duplicate_claim_details")
+            if dup_details:
+                hard_failures.append(f"Fraud prevention flag: {dup_details}")
+            else:
+                hard_failures.append("Fraud prevention flag: An identical claim was recently filed for this serial number.")
         else:
             passed_checks.append("Duplicate check passed (no identical active claims).")
 

@@ -56,6 +56,7 @@ class ClaimSubmitRequest(BaseModel):
     serial_number_on_barcode: Optional[str] = None
     model_number_on_barcode: Optional[str] = None
     repair_report_uploaded: bool = False
+    invoice_number: Optional[str] = None
     ocr_extracted_json: Optional[str] = None
     cross_verification_json: Optional[str] = None
 
@@ -83,6 +84,7 @@ class OCRProcessResponse(BaseModel):
     detected_serials: List[str] = []
     model_number: Optional[str] = None
     detected_models: List[str] = []
+    invoice_number: Optional[str] = None
     purchase_amount: Optional[float] = None
     ocr_confidence: float = 0.85
     ocr_engine: str = "Tesseract_OCR"
@@ -90,7 +92,26 @@ class OCRProcessResponse(BaseModel):
     file_path: str
     is_duplicate_file: bool = False
     duplicate_claim_id: Optional[str] = None
+    is_duplicate_invoice: bool = False
+    duplicate_invoice_claim_id: Optional[str] = None
     raw_text: Optional[str] = None
+
+
+class DuplicateCheckRequest(BaseModel):
+    product_id: Optional[str] = None
+    serial_number_entered: Optional[str] = None
+    fault_description: Optional[str] = None
+    invoice_number: Optional[str] = None
+    receipt_hash: Optional[str] = None
+    current_claim_id: Optional[str] = None
+
+
+class DuplicateCheckResponse(BaseModel):
+    is_duplicate: bool
+    duplicate_type: Optional[str] = None
+    matched_claim_id: Optional[str] = None
+    similarity_score: float = 0.0
+    details: Optional[str] = None
 
 
 class CrossVerificationRequest(BaseModel):
@@ -159,6 +180,8 @@ class ClaimResponse(BaseModel):
     date_contradiction_flag: bool
     excluded_damage: bool
     duplicate_claim_flag: bool
+    duplicate_claim_details: Optional[str] = None
+    invoice_number: Optional[str] = None
 
     # Paths & Hashes
     card_image_path: Optional[str] = None

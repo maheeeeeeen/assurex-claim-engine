@@ -79,4 +79,6 @@ htmlcov/
 backend/diagnose_step1.py
 backend/test_step4_policies.py
 **/backup/
+**/backup_original/
 **/scratch/
+uploads/

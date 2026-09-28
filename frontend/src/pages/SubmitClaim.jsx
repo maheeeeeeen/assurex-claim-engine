@@ -51,6 +51,7 @@ const INITIAL_FORM_STATE = {
   brand: '',
   model_number: '',
   serial_number_entered: '',
+  invoice_number: '',
   purchase_price: '',
   retailer: '',
   purchase_date: '',
@@ -107,6 +108,10 @@ export default function SubmitClaim() {
   const [receiptFile, setReceiptFile] = useState(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrResult, setOcrResult] = useState(null);
+
+  // Duplicate pre-check warning state (Task 3)
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
 
   // Result modal state
   const [adjudicationResult, setAdjudicationResult] = useState(null);
@@ -327,6 +332,60 @@ export default function SubmitClaim() {
     loadProductsAndWarranties();
   }, []);
 
+  // Task 3: Real-time debounced semantic & invoice duplicate pre-check
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      const pid = formData.product_id;
+      const serial = formData.serial_number_entered;
+      const desc = formData.fault_description;
+      const inv = formData.invoice_number;
+      const hash = formData.receipt_hash;
+
+      if (!pid && !serial && !inv && !hash) {
+        setDuplicateWarning(null);
+        return;
+      }
+
+      // Check if there is either an invoice number, a receipt hash, or a fault description >= 8 chars
+      const hasDesc = desc && desc.trim().length >= 8;
+      const hasInv = inv && inv.trim().length >= 2;
+      const hasHash = Boolean(hash);
+
+      if (!hasInv && !hasDesc && !hasHash) {
+        setDuplicateWarning(null);
+        return;
+      }
+
+      try {
+        setCheckingDuplicate(true);
+        const res = await claimsAPI.checkDuplicate({
+          product_id: pid || null,
+          serial_number: serial || null,
+          invoice_number: inv || null,
+          fault_description: desc || null,
+          receipt_hash: hash || null,
+        });
+        if (res.data && res.data.is_duplicate) {
+          setDuplicateWarning(res.data);
+        } else {
+          setDuplicateWarning(null);
+        }
+      } catch (err) {
+        console.error('Error pre-checking duplicate:', err);
+      } finally {
+        setCheckingDuplicate(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [
+    formData.product_id,
+    formData.serial_number_entered,
+    formData.fault_description,
+    formData.invoice_number,
+    formData.receipt_hash,
+  ]);
+
   // Check if form has user-entered data before overwriting
   const hasExistingData = () => {
     const fieldsToCheck = [
@@ -397,6 +456,8 @@ export default function SubmitClaim() {
     setReceiptFile(null);
     setOcrResult(null);
     setOcrLoading(false);
+    setDuplicateWarning(null);
+    setCheckingDuplicate(false);
     setSelectedProductId('');
     setLinkedProduct(null);
     setPendingProduct(null);
@@ -590,6 +651,7 @@ export default function SubmitClaim() {
         ...prev,
         receipt_path: res.data.file_path,
         receipt_hash: res.data.file_hash,
+        invoice_number: res.data.invoice_number || prev.invoice_number,
         serial_number_on_receipt: res.data.serial_number || prev.serial_number_entered,
         model_number_on_receipt: res.data.model_number || prev.model_number,
       }));
@@ -609,6 +671,7 @@ export default function SubmitClaim() {
       purchase_date: ocrResult.purchase_date || prev.purchase_date,
       warranty_start: ocrResult.purchase_date || prev.warranty_start,
       purchase_price: ocrResult.purchase_amount !== null && ocrResult.purchase_amount !== undefined ? ocrResult.purchase_amount : prev.purchase_price,
+      invoice_number: ocrResult.invoice_number || prev.invoice_number,
       serial_number_entered: ocrResult.serial_number || prev.serial_number_entered,
       serial_number_on_receipt: ocrResult.serial_number || prev.serial_number_on_receipt,
       model_number: ocrResult.model_number || prev.model_number,
@@ -1080,7 +1143,7 @@ export default function SubmitClaim() {
                     )}
                   </Col>
 
-                  <Col md={6}>
+                  <Col md={4}>
                     <Form.Label>Retailer / Merchant</Form.Label>
                     <Form.Control 
                       name="retailer"
@@ -1099,7 +1162,7 @@ export default function SubmitClaim() {
                     )}
                   </Col>
 
-                  <Col md={6}>
+                  <Col md={4}>
                     <Form.Label>Date of Purchase</Form.Label>
                     <Form.Control 
                       type="date"
@@ -1116,6 +1179,20 @@ export default function SubmitClaim() {
                         <span>Modified from registered: <strong>{fieldMismatches.purchase_date.original}</strong> (may require manual review)</span>
                       </div>
                     )}
+                  </Col>
+
+                  <Col md={4}>
+                    <Form.Label>Invoice / Receipt Number</Form.Label>
+                    <Form.Control 
+                      name="invoice_number"
+                      value={formData.invoice_number || ''}
+                      onChange={handleInputChange}
+                      placeholder="e.g. INV-2025-00123"
+                      className="font-mono"
+                    />
+                    <div className="text-muted small mt-1" style={{ fontSize: '0.70rem' }}>
+                      Auto-extracted via OCR or entered manually
+                    </div>
                   </Col>
                 </Row>
               </Card.Body>
@@ -1231,7 +1308,14 @@ export default function SubmitClaim() {
                   </Col>
 
                   <Col md={12}>
-                    <Form.Label>Detailed Fault Description</Form.Label>
+                    <div className="d-flex justify-content-between align-items-center mb-1">
+                      <Form.Label className="mb-0">Detailed Fault Description</Form.Label>
+                      {checkingDuplicate && (
+                        <span className="text-muted small d-inline-flex align-items-center gap-1" style={{ fontSize: '0.72rem' }}>
+                          <Spinner animation="border" size="sm" style={{ width: '0.7rem', height: '0.7rem' }} /> Checking duplicate claims...
+                        </span>
+                      )}
+                    </div>
                     <Form.Control 
                       as="textarea"
                       rows={3}
@@ -1241,6 +1325,21 @@ export default function SubmitClaim() {
                       placeholder="Provide thorough description of how the device failed..."
                       required
                     />
+                    {duplicateWarning && (
+                      <Alert variant="danger" className="mt-2 py-2 px-3 border border-danger border-opacity-50 bg-danger bg-opacity-10 text-danger small shadow-sm">
+                        <div className="d-flex align-items-center gap-2 fw-bold">
+                          <FaExclamationTriangle /> Potential Duplicate Claim Detected ({duplicateWarning.similarity_score ? `${Math.round(duplicateWarning.similarity_score * 100)}% Similarity` : 'Identical Match'})
+                        </div>
+                        <div className="mt-1" style={{ fontSize: '0.76rem' }}>
+                          {duplicateWarning.details}
+                        </div>
+                        {duplicateWarning.matched_claim_id && (
+                          <div className="mt-1 font-mono text-muted" style={{ fontSize: '0.72rem' }}>
+                            Conflicting Prior Claim: <strong className="text-danger">{duplicateWarning.matched_claim_id}</strong>
+                          </div>
+                        )}
+                      </Alert>
+                    )}
                   </Col>
                 </Row>
               </Card.Body>
@@ -1305,12 +1404,28 @@ export default function SubmitClaim() {
                         </Alert>
                       )}
 
+                      {/* Duplicate Invoice Warning */}
+                      {ocrResult.is_duplicate_invoice && (
+                        <Alert variant="danger" className="small py-2 px-2 mb-2 d-flex align-items-start gap-2 border-0 bg-danger bg-opacity-10 text-danger">
+                          <FaExclamationTriangle className="flex-shrink-0 mt-1" />
+                          <div style={{ fontSize: '0.74rem' }}>
+                            <strong>Duplicate Invoice Warning:</strong> Invoice number <strong>{ocrResult.invoice_number}</strong> was previously recorded in claim <Badge bg="danger">{ocrResult.duplicate_invoice_claim_id}</Badge>.
+                          </div>
+                        </Alert>
+                      )}
+
                       {/* Extracted Key-Value Summary */}
                       <div className="small mb-2 p-2 rounded bg-black bg-opacity-25 border border-secondary border-opacity-25">
                         <div className="d-flex justify-content-between py-1 border-bottom border-secondary border-opacity-25">
                           <span className="text-muted">Detected Merchant:</span>
                           <span className="text-white fw-semibold">{ocrResult.merchant || ocrResult.retailer || 'Authorized Retailer'}</span>
                         </div>
+                        {ocrResult.invoice_number && (
+                          <div className="d-flex justify-content-between py-1 border-bottom border-secondary border-opacity-25">
+                            <span className="text-muted">Invoice Number:</span>
+                            <span className="text-info font-mono fw-semibold">{ocrResult.invoice_number}</span>
+                          </div>
+                        )}
                         <div className="d-flex justify-content-between py-1 border-bottom border-secondary border-opacity-25">
                           <span className="text-muted">Invoice Date:</span>
                           <span className="text-white fw-semibold">{ocrResult.purchase_date || 'Not detected'}</span>

@@ -32,6 +32,9 @@ export const claimsAPI = {
   // Real-time cross-document serial & model verification
   crossVerify: (data) => api.post('/api/claims/cross-verify', data),
 
+  // Semantic duplicate claim detection check
+  checkDuplicate: (data) => api.post('/api/claims/check-duplicate', data),
+
   // Adjuster decision on a claim
   adjudicateClaim: (claimId, payload) =>
     api.post(`/api/claims/${claimId}/adjudicate`, payload),

@@ -28,11 +28,14 @@ from src.schemas.claims import (
     OCRProcessResponse,
     MediaUploadResponse,
     CrossVerificationRequest,
-    CrossVerificationResponse
+    CrossVerificationResponse,
+    DuplicateCheckRequest,
+    DuplicateCheckResponse
 )
 from src.services.adjudication_engine import AdjudicationEngine
 from src.services.card_service import CardService
 from src.services.ocr_service import OCRService
+from src.services.duplicate_detector import DuplicateDetector
 
 router = APIRouter()
 
@@ -88,6 +91,21 @@ async def process_ocr(
     is_duplicate = existing_claim is not None
     dup_claim_id = existing_claim.claim_id if existing_claim else None
 
+    # 5. Check for duplicate invoice number in existing claims
+    inv_num = ocr_result.get("invoice_number")
+    is_duplicate_inv = False
+    dup_inv_claim_id = None
+    if inv_num:
+        norm_inv = inv_num.strip().upper()
+        existing_inv_claims = session.exec(
+            select(Claim).where(Claim.invoice_number.is_not(None))
+        ).all()
+        for c in existing_inv_claims:
+            if c.invoice_number and c.invoice_number.strip().upper() == norm_inv:
+                is_duplicate_inv = True
+                dup_inv_claim_id = c.claim_id
+                break
+
     return {
         "merchant": ocr_result.get("merchant") or ocr_result.get("retailer") or "Authorized Retailer",
         "retailer": ocr_result.get("retailer") or ocr_result.get("merchant") or "Authorized Retailer",
@@ -96,6 +114,7 @@ async def process_ocr(
         "detected_serials": ocr_result.get("detected_serials", []),
         "model_number": ocr_result.get("model_number"),
         "detected_models": ocr_result.get("detected_models", []),
+        "invoice_number": inv_num,
         "purchase_amount": ocr_result.get("purchase_amount"),
         "ocr_confidence": ocr_result.get("ocr_confidence", 0.85),
         "ocr_engine": ocr_result.get("ocr_engine", "Tesseract_OCR"),
@@ -103,6 +122,8 @@ async def process_ocr(
         "file_path": file_path.replace("\\", "/"),
         "is_duplicate_file": is_duplicate,
         "duplicate_claim_id": dup_claim_id,
+        "is_duplicate_invoice": is_duplicate_inv,
+        "duplicate_invoice_claim_id": dup_inv_claim_id,
         "raw_text": ocr_result.get("raw_text"),
     }
 
@@ -271,6 +292,30 @@ def cross_verify_documents(
     )
 
 
+@router.post("/check-duplicate", response_model=DuplicateCheckResponse)
+def check_duplicate_claim(
+    payload: DuplicateCheckRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_role(["customer", "employee", "admin"]))
+):
+    """
+    Real-time pre-submission duplicate evaluation across:
+    1. Cryptographic document SHA-256 hash matching
+    2. Matching invoice / receipt numbers across prior claims
+    3. Semantic fault description similarity for the same product or hardware serial number
+    """
+    res = DuplicateDetector.check_duplicate(
+        session=session,
+        product_id=payload.product_id,
+        serial_number=payload.serial_number_entered,
+        fault_description=payload.fault_description,
+        invoice_number=payload.invoice_number,
+        receipt_hash=payload.receipt_hash,
+        current_claim_id=payload.current_claim_id,
+    )
+    return DuplicateCheckResponse(**res)
+
+
 @router.post("/submit", response_model=ClaimResponse, status_code=status.HTTP_201_CREATED)
 def submit_claim(
     claim_in: ClaimSubmitRequest,
@@ -391,14 +436,17 @@ def submit_claim(
     has_serial_mismatch = cross_recon["has_serial_mismatch"]
     cross_verification_str = json.dumps(cross_recon)
 
-    # Check for duplicate document hash in existing claims
-    is_duplicate_claim = False
-    if claim_in.receipt_hash:
-        existing_dup = session.exec(
-            select(Claim).where(Claim.receipt_hash == claim_in.receipt_hash)
-        ).first()
-        if existing_dup:
-            is_duplicate_claim = True
+    # Task 3: Multi-factor duplicate claim detection (hash, invoice number, semantic fault similarity)
+    dup_eval = DuplicateDetector.check_duplicate(
+        session=session,
+        product_id=product_id,
+        serial_number=claim_in.serial_number_entered,
+        fault_description=claim_in.fault_description,
+        invoice_number=claim_in.invoice_number,
+        receipt_hash=claim_in.receipt_hash,
+    )
+    is_duplicate_claim = dup_eval["is_duplicate"]
+    duplicate_claim_details = dup_eval["details"]
 
     claim_dict = {
         "claim_id": claim_id,
@@ -441,6 +489,8 @@ def submit_claim(
         "date_contradiction_flag": False,
         "excluded_damage": False,
         "duplicate_claim_flag": is_duplicate_claim,
+        "duplicate_claim_details": duplicate_claim_details,
+        "invoice_number": claim_in.invoice_number,
     }
 
     # 1. Run Complete Adjudication Engine
@@ -502,6 +552,8 @@ def submit_claim(
         card_image_path=card_image_rel_path,
         serial_mismatch_flag=has_serial_mismatch,
         duplicate_claim_flag=is_duplicate_claim,
+        duplicate_claim_details=duplicate_claim_details,
+        invoice_number=claim_in.invoice_number,
         ocr_extracted_json=claim_in.ocr_extracted_json,
         rule_evaluation_json=json.dumps(eval_result["rule_evaluation"]),
         tabular_prediction=eval_result["tabular_prediction"]["predicted_class"],
@@ -565,9 +617,9 @@ def submit_claim(
     if is_duplicate_claim:
         log_dup = ClaimAuditLog(
             claim_id=claim_id,
-            actor="Document_Integrity",
-            action="DUPLICATE_DOCUMENT_DETECTED",
-            details=f"Receipt SHA-256 hash '{claim_in.receipt_hash[:16]}...' previously recorded in database.",
+            actor="Fraud_Prevention_System",
+            action="DUPLICATE_CLAIM_DETECTED",
+            details=duplicate_claim_details or "Duplicate submission pattern detected across existing claims.",
         )
         session.add(log_dup)
 

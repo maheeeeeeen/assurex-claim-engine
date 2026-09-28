@@ -134,6 +134,8 @@ class Claim(SQLModel, table=True):
     date_contradiction_flag: bool = Field(default=False)
     excluded_damage: bool = Field(default=False)
     duplicate_claim_flag: bool = Field(default=False)
+    duplicate_claim_details: Optional[str] = None
+    invoice_number: Optional[str] = Field(default=None, index=True)
 
     # Intelligence & Analysis JSONs
     ocr_extracted_json: Optional[str] = None

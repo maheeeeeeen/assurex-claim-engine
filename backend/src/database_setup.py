@@ -57,6 +57,8 @@ def _migrate_sqlite_columns():
                 ("serial_number_on_barcode", "TEXT"),
                 ("model_number_on_barcode", "TEXT"),
                 ("cross_verification_json", "TEXT"),
+                ("invoice_number", "TEXT"),
+                ("duplicate_claim_details", "TEXT"),
             ]
             for col_name, col_type in new_cols:
                 if col_name not in existing_cols:
