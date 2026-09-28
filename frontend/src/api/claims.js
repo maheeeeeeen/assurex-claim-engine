@@ -38,6 +38,12 @@ export const claimsAPI = {
   // Adjuster decision on a claim
   adjudicateClaim: (claimId, payload) =>
     api.post(`/api/claims/${claimId}/adjudicate`, payload),
+    
+  // Export CSV
+  exportCSV: (params = {}) => api.get('/api/claims/export/csv', { params, responseType: 'blob' }),
+  
+  // Export HTML Dossier
+  exportHTML: (claimId) => api.get(`/api/claims/${claimId}/export/html`, { responseType: 'blob' }),
 };
 
 export default claimsAPI;

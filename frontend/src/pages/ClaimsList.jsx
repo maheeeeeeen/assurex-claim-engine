@@ -14,7 +14,8 @@ import {
   FaExchangeAlt, 
   FaEye, 
   FaPlusCircle, 
-  FaUndo 
+  FaUndo,
+  FaFileCsv
 } from 'react-icons/fa';
 
 export default function ClaimsList() {
@@ -65,6 +66,27 @@ export default function ClaimsList() {
     fetchClaims('');
   };
 
+  const handleExportCSV = async () => {
+    try {
+      const params = {
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        category: categoryFilter !== 'all' ? categoryFilter : undefined,
+        search: search.trim() ? search.trim() : undefined,
+      };
+      const res = await claimsAPI.exportCSV(params);
+      
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'claims_export.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+    }
+  };
+
   return (
     <Container fluid className="px-4 py-4">
       {/* Title & Action Bar */}
@@ -75,13 +97,22 @@ export default function ClaimsList() {
             Browse, search, and audit all submitted claims with dual-model adjudication scores
           </p>
         </div>
-        <Button 
-          variant="primary" 
-          onClick={() => navigate('/claims/submit')}
-          className="d-flex align-items-center gap-2"
-        >
-          <FaPlusCircle /> Submit Claim
-        </Button>
+        <div className="d-flex gap-2">
+          <Button 
+            variant="outline-success" 
+            onClick={handleExportCSV}
+            className="d-flex align-items-center gap-2"
+          >
+            <FaFileCsv /> Export CSV
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={() => navigate('/claims/submit')}
+            className="d-flex align-items-center gap-2"
+          >
+            <FaPlusCircle /> Submit Claim
+          </Button>
+        </div>
       </div>
 
       {/* Filter Card */}

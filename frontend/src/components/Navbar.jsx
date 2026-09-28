@@ -8,6 +8,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { FaShieldAlt, FaPlusCircle, FaListAlt, FaTasks, FaCogs, FaSignOutAlt, FaBox, FaUser, FaFileContract } from 'react-icons/fa';
 import ProfileModal from './ProfileModal';
+import NotificationDropdown from './NotificationDropdown';
 
 export default function AppNavbar() {
   const { isAuthenticated, user, role, logout } = useAuth();
@@ -35,7 +36,7 @@ export default function AppNavbar() {
 
   return (
     <>
-      <Navbar expand="lg" sticky="top" className="navbar-custom py-2">
+      <Navbar expand="lg" sticky="top" variant="dark" data-bs-theme="dark" className="navbar-custom py-2">
         <Container fluid className="px-4">
           <Navbar.Brand as={NavLink} to="/" className="text-white">
             <span className="p-1 px-2 rounded bg-primary text-white me-2" style={{ fontSize: '1rem' }}>
@@ -152,6 +153,8 @@ export default function AppNavbar() {
                       {role}
                     </Badge>
                   </div>
+
+                  <NotificationDropdown />
 
                   <Button 
                     variant="outline-secondary" 

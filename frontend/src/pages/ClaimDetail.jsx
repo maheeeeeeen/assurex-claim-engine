@@ -100,6 +100,21 @@ export default function ClaimDetail() {
     }
   };
 
+  const handleExportHTML = async () => {
+    try {
+      const res = await claimsAPI.exportHTML(id);
+      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'text/html' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `claim_dossier_${id}.html`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Failed to export HTML dossier:', err);
+    }
+  };
+
   if (loading) {
     return (
       <Container className="py-5 text-center">
@@ -178,6 +193,16 @@ export default function ClaimDetail() {
         </div>
 
         <div className="d-flex align-items-center gap-3">
+          {(user?.role === 'reviewer' || user?.role === 'admin' || user?.role === 'employee') && (
+            <Button 
+              variant="outline-primary" 
+              size="sm"
+              onClick={handleExportHTML}
+              className="d-flex align-items-center gap-1"
+            >
+              <FaDownload /> Export Dossier
+            </Button>
+          )}
           <div className="text-end d-none d-md-block">
             <div className="text-muted small">Adjudication Confidence</div>
             <div className="fw-extrabold fs-5 text-white font-mono">
@@ -545,6 +570,25 @@ export default function ClaimDetail() {
 
         {/* Right Column: AI Engine, Rule Checklist, and Adjuster Controls */}
         <Col lg={7}>
+          {/* AI-Generated Narrative Summary (Task 2/FR xxxii) */}
+          {dossier.narrative_summary && (
+            <Card className="mb-4">
+              <Card.Header className="d-flex justify-content-between align-items-center">
+                <span className="fw-bold d-flex align-items-center gap-2">
+                  <FaBrain className="text-info" /> AI-Generated Claim Summary
+                </span>
+                <Badge bg="info" className="font-mono text-uppercase" style={{ fontSize: '0.65rem' }}>
+                  Auto-Narrative
+                </Badge>
+              </Card.Header>
+              <Card.Body className="p-3">
+                <p className="text-light mb-0" style={{ fontSize: '0.9rem', lineHeight: '1.5' }}>
+                  {dossier.narrative_summary}
+                </p>
+              </Card.Body>
+            </Card>
+          )}
+
           {/* Dual-Brain AI Model Arbitration */}
           <Card className="mb-4">
             <Card.Header className="d-flex justify-content-between align-items-center">

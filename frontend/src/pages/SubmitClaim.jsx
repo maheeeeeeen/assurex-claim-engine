@@ -41,7 +41,8 @@ import {
   FaUndo,
   FaExchangeAlt,
   FaCertificate,
-  FaFilePdf
+  FaFilePdf,
+  FaClipboardList
 } from 'react-icons/fa';
 
 const INITIAL_FORM_STATE = {
@@ -1900,58 +1901,78 @@ export default function SubmitClaim() {
 
                 <hr className="border-secondary opacity-25" />
 
-                {/* Evidence Checklist */}
-                <div className="small fw-semibold text-muted mb-2">Evidence Attached Status</div>
-                <Form.Check 
-                  type="checkbox"
-                  id="chk-receipt"
-                  name="receipt_uploaded"
-                  label="Purchase Receipt Available"
-                  checked={formData.receipt_uploaded}
-                  onChange={handleInputChange}
-                  className="mb-2 small"
-                />
-                <div className="d-flex align-items-center justify-content-between mb-2 small text-light ps-1">
-                  <span className="d-flex align-items-center gap-2">
-                    <FaCertificate className="text-warning" size={12} /> Warranty Card / Certificate:
-                  </span>
-                  {formData.warranty_card_uploaded ? (
-                    <Badge bg="success" className="d-flex align-items-center gap-1" style={{ fontSize: '0.68rem' }}>
-                      <FaCheckCircle size={8} /> Attached
-                    </Badge>
-                  ) : (
-                    <Badge bg="dark" className="border border-secondary text-muted" style={{ fontSize: '0.68rem' }}>
-                      Not Attached
-                    </Badge>
-                  )}
+                {/* Claim Preparation Assistance (FR xxxiii) */}
+                <div className="p-3 mb-3 rounded bg-surface border border-secondary border-opacity-25">
+                  <div className="d-flex align-items-center gap-2 fw-bold text-white mb-2">
+                    <FaClipboardList className="text-info" /> Pre-Submission Checklist
+                  </div>
+                  <p className="text-muted small mb-3" style={{ fontSize: '0.74rem' }}>
+                    AssureX AI analyzes your claim for gaps prior to submission. Resolve any warnings below to increase approval confidence.
+                  </p>
+                  <ul className="list-unstyled mb-0 small d-flex flex-column gap-2" style={{ fontSize: '0.8rem' }}>
+                    
+                    <li className="d-flex align-items-start gap-2">
+                      {formData.receipt_uploaded ? <FaCheckCircle className="text-success mt-1" /> : <FaExclamationTriangle className="text-warning mt-1" />}
+                      <div>
+                        <strong>Purchase Receipt</strong>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                          {formData.receipt_uploaded ? 'Uploaded and analyzed via OCR.' : 'Missing. High risk of auto-rejection.'}
+                        </div>
+                      </div>
+                    </li>
+
+                    <li className="d-flex align-items-start gap-2">
+                      {formData.warranty_card_uploaded ? <FaCheckCircle className="text-success mt-1" /> : <FaExclamationTriangle className="text-warning mt-1" />}
+                      <div>
+                        <strong>Warranty Certificate</strong>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                          {formData.warranty_card_uploaded ? 'Uploaded and verified.' : 'Missing. Claim will require manual review.'}
+                        </div>
+                      </div>
+                    </li>
+
+                    <li className="d-flex align-items-start gap-2">
+                      {formData.product_image_uploaded && formData.fault_evidence_uploaded ? <FaCheckCircle className="text-success mt-1" /> : <FaExclamationTriangle className="text-warning mt-1" />}
+                      <div>
+                        <strong>Photographic Evidence</strong>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                          {formData.product_image_uploaded && formData.fault_evidence_uploaded ? 'Product and fault photos attached.' : 'Missing product or fault photos.'}
+                        </div>
+                      </div>
+                    </li>
+
+                    <li className="d-flex align-items-start gap-2">
+                      {crossDocVerification.hasActiveDocs && !crossDocVerification.hasMismatch ? (
+                        <FaCheckCircle className="text-success mt-1" />
+                      ) : crossDocVerification.hasMismatch ? (
+                        <FaTimesCircle className="text-danger mt-1" />
+                      ) : (
+                        <FaExclamationTriangle className="text-warning mt-1" />
+                      )}
+                      <div>
+                        <strong>Data Consistency</strong>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                          {crossDocVerification.hasActiveDocs && !crossDocVerification.hasMismatch 
+                            ? 'All document serials match.' 
+                            : crossDocVerification.hasMismatch 
+                            ? 'Discrepancy detected between documents.' 
+                            : 'Upload documents to run consistency check.'}
+                        </div>
+                      </div>
+                    </li>
+
+                    <li className="d-flex align-items-start gap-2">
+                      {formData.previous_repair_authorized ? <FaCheckCircle className="text-success mt-1" /> : <FaExclamationTriangle className="text-warning mt-1" />}
+                      <div>
+                        <strong>Prior Repair Authorization</strong>
+                        <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                          {formData.previous_repair_authorized ? 'Authorized.' : 'Unauthorized repairs risk warranty void.'}
+                        </div>
+                      </div>
+                    </li>
+
+                  </ul>
                 </div>
-                <Form.Check 
-                  type="checkbox"
-                  id="chk-img"
-                  name="product_image_uploaded"
-                  label="Clear Product Photo Available"
-                  checked={formData.product_image_uploaded}
-                  onChange={handleInputChange}
-                  className="mb-2 small"
-                />
-                <Form.Check 
-                  type="checkbox"
-                  id="chk-fault"
-                  name="fault_evidence_uploaded"
-                  label="Photographic Fault Evidence Available"
-                  checked={formData.fault_evidence_uploaded}
-                  onChange={handleInputChange}
-                  className="mb-2 small"
-                />
-                <Form.Check 
-                  type="checkbox"
-                  id="chk-auth"
-                  name="previous_repair_authorized"
-                  label="Prior Repairs Authorized by Manufacturer"
-                  checked={formData.previous_repair_authorized}
-                  onChange={handleInputChange}
-                  className="mb-3 small"
-                />
 
                 {/* Submit Action & Reset Button */}
                 <div className="d-flex gap-2">

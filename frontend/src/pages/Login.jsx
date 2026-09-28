@@ -67,7 +67,7 @@ export default function Login() {
           <Card className="border-0 shadow-lg">
             <Card.Body className="p-4 p-md-5">
               <h4 className="fw-bold mb-1">Sign In</h4>
-              <p className="text-muted small mb-4">Enter your credentials or use a quick demo profile</p>
+              <p className="text-muted small mb-4">Enter your credentials to access the console</p>
 
               {error && <Alert variant="danger" dismissible onClose={() => setError('')} className="py-2 small">{error}</Alert>}
 
@@ -111,46 +111,6 @@ export default function Login() {
                   )}
                 </Button>
               </Form>
-
-              <hr className="my-4 border-secondary opacity-25" />
-
-              {/* Demo Profiles */}
-              <div>
-                <small className="text-muted d-block mb-2 text-uppercase fw-bold" style={{ fontSize: '0.7rem', letterSpacing: '0.05em' }}>
-                  ⚡ Quick Demo Login Profiles
-                </small>
-                <div className="d-grid gap-2">
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    className="text-start d-flex align-items-center justify-content-between p-2"
-                    onClick={() => handleQuickLogin('admin', 'Admin@12345')}
-                  >
-                    <span><FaUserTie className="me-2 text-danger" /> <strong>Chief Admin</strong></span>
-                    <Badge bg="danger" className="text-uppercase" style={{ fontSize: '0.65rem' }}>Full Access</Badge>
-                  </Button>
-
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    className="text-start d-flex align-items-center justify-content-between p-2"
-                    onClick={() => handleQuickLogin('adjuster_sarah', 'Adjuster@12345')}
-                  >
-                    <span><FaUserCheck className="me-2 text-warning" /> <strong>Lead Adjuster</strong></span>
-                    <Badge bg="warning" className="text-dark text-uppercase" style={{ fontSize: '0.65rem' }}>Review Queue</Badge>
-                  </Button>
-
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    className="text-start d-flex align-items-center justify-content-between p-2"
-                    onClick={() => handleQuickLogin('customer_mike', 'Customer@12345')}
-                  >
-                    <span><FaUser className="me-2 text-primary" /> <strong>Customer Portal</strong></span>
-                    <Badge bg="primary" className="text-uppercase" style={{ fontSize: '0.65rem' }}>Claim Intake</Badge>
-                  </Button>
-                </div>
-              </div>
 
               <div className="text-center mt-4 pt-2">
                 <small className="text-muted">
