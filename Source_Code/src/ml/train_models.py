@@ -59,7 +59,7 @@ from preprocessing import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 MODEL_DIR = os.path.join(BASE_DIR, "model")
-REPORTS_DIR = os.path.join(os.path.dirname(BASE_DIR), "reports")
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 CM_DIR = os.path.join(REPORTS_DIR, "confusion_matrices")
 
 os.makedirs(MODEL_DIR, exist_ok=True)

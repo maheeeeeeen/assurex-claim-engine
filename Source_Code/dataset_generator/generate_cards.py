@@ -28,7 +28,7 @@ import multiprocessing
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-ROOT_DIR = os.path.dirname(BASE_DIR)
+ROOT_DIR = BASE_DIR
 CARDS_DIR = os.path.join(ROOT_DIR, "sample_claims", "cards")
 
 CLASS_FOLDER_MAP = {

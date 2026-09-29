@@ -121,6 +121,6 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 
 
 # --- Production Static Frontend Bundle (if built) ---
-frontend_dist = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
+frontend_dist = os.path.join(BASE_DIR, "dist")
 if os.path.exists(frontend_dist):
     app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")

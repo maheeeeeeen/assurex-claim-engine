@@ -23,8 +23,8 @@ from .teachable_machine import TeachableMachinePredictor
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_PATH = os.path.join(BASE_DIR, "data", "claims_test.csv")
-CARDS_TEST_DIR = os.path.join(os.path.dirname(BASE_DIR), "sample_claims", "cards", "test")
-REPORTS_DIR = os.path.join(os.path.dirname(BASE_DIR), "reports")
+CARDS_TEST_DIR = os.path.join(BASE_DIR, "sample_claims", "cards", "test")
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 
 
 def build_card_index() -> Dict[str, str]:

@@ -25,9 +25,9 @@ from tensorflow.keras import layers, models
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CARDS_DIR = os.path.join(os.path.dirname(BASE_DIR), "sample_claims", "cards")
+CARDS_DIR = os.path.join(BASE_DIR, "sample_claims", "cards")
 MODEL_DIR = os.path.join(BASE_DIR, "model", "teachable_machine")
-REPORTS_DIR = os.path.join(os.path.dirname(BASE_DIR), "reports")
+REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 
 TRAIN_DIR = os.path.join(CARDS_DIR, "train")
 VAL_DIR = os.path.join(CARDS_DIR, "val")
